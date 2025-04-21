@@ -1,0 +1,48 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+overflow-checks = false
+debug-assertions = false
+debug = false
+incremental = true
+opt-level = 3
+codegen-units = 255
+
+[dependencies]
+poem = { version = "3.1.9", features = ["static-files"] }
+reqwest = { version = "0.12.15", features = ["http2", "json"] }
+tokio = { version = "1.44.2", features = ["rt", "rt-multi-thread", "tokio-macros"] }
+dotenv = "0.15.0"
+serde_json = "1.0.140"
+chrono = "0.4.40"
+crypto = "0.5.1"
+brotli = "8.0.0"
+base64 = "0.22.1"
+memmap2 = "0.9.5"
+serde = { version = "1.0.219", features = ["derive"] }
+rand = { version = "0.9.1", features = ["unbiased", ] }
+rand_chacha = "0.9.0"
+regex = { version = "1.11.1", features = ["perf"] }
+sanitizer = "0.1.6"
+svg = "0.18.0"
+rust-s3-async = "0.35.0"
+
+[profile.release.build-override]
+debug = "none"
+opt-level = 3
+overflow-checks = false
+incremental = true
+debug-assertions = false
+
+[profile.dev.build-override]
+debug = "full"
+opt-level = "z"
+overflow-checks = true
+incremental = true
+debug-assertions = true
+
+[profile.test]
+incremental = true
