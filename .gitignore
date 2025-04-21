@@ -1,0 +1,7 @@
+**/*.zip
+.env
+client/test.html
+server/target
+server/logs
+**/.idea
+**/._*
