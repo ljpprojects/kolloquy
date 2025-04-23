@@ -1,13 +1,16 @@
-use std::io::Cursor;
+use crate::data::{DBQuery, R2Query, R2QueryKind};
 use base64::alphabet::Alphabet;
-use base64::Engine;
 use base64::engine::GeneralPurpose;
+use base64::Engine;
 use brotli::BrotliCompress;
-use brotli::enc::singlethreading::compress_multi;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::data::DBQuery;
+use std::io::Cursor;
+use poem::http::Uri;
+use reqwest::Url;
+use svg::Document;
 
+#[derive(Debug, Clone)]
 pub struct User {
     pub email: String, // user input
     pub handle: String, // user input
@@ -40,11 +43,20 @@ pub struct RegisterBody {
     pub password: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticateBody {
+    pub email: String,
+    pub password: String,
+    pub redirect: String,
+}
+
 pub enum UserQuery {
     GetByEmail(String),
     GetByHandle(String),
     GetByID(String),
-    Register(User)
+    PutToDB(User),
+    UploadAvatar(User, Document),
+    GetAvatar(User)
 }
 
 impl DBQuery for UserQuery {
@@ -53,7 +65,7 @@ impl DBQuery for UserQuery {
             Self::GetByEmail(email) => ("SELECT * FROM users WHERE email = ?".to_string(), vec![email.clone()]),
             Self::GetByHandle(handle) => ("SELECT * FROM users WHERE handle = ?".to_string(), vec![handle.clone()]),
             Self::GetByID(id) => ("SELECT * FROM users WHERE userid = ?".to_string(), vec![id.clone()]),
-            Self::Register(user) => {
+            Self::PutToDB(user) => {
                 let mut read_desc = Cursor::new(user.description.clone());
                 let mut compressed_desc = Vec::with_capacity((user.description.len() as f64 / 1.3).ceil() as usize);
 
@@ -84,7 +96,51 @@ impl DBQuery for UserQuery {
                         user.timezone.to_string(),
                     ]
                 )
+            },
+            
+            _ => panic!("Cannot convert to SQL query string for this query type.")
+        }
+    }
+    
+    fn has_result(&self) -> bool {
+        match self {
+            Self::GetByEmail(_) | Self::GetByHandle(_) | Self::GetByID(_) => true,
+            _ => false
+        }
+    }
+}
+
+impl R2Query for UserQuery {
+    fn path(&self) -> String {
+        match self {
+            Self::UploadAvatar(user, _) | Self::GetAvatar(user) => {
+                format!("/{}", user.avatar_url)
             }
+            _ => panic!("Cannot make R2 query for this query type.")
+        }
+    }
+
+    fn kind(&self) -> R2QueryKind {
+        match self {
+            Self::UploadAvatar(user, svg) => {
+                let mut avatar = Cursor::new(svg.to_string());
+                let mut compressed_avatar = Vec::with_capacity((svg.to_string().len() as f64 / 1.3).ceil() as usize);
+                BrotliCompress(&mut avatar, &mut compressed_avatar, &Default::default()).unwrap();
+                 
+                R2QueryKind::PutObject(compressed_avatar)
+            }
+            Self::GetAvatar(_) => {
+                R2QueryKind::GetObject
+            }
+            _ => panic!("Cannot make R2 query for this query type.")
+        }
+    }
+    
+    fn has_result(&self) -> bool {
+        match self {
+            UserQuery::GetByEmail(_) | UserQuery::GetByHandle(_) | UserQuery::GetByID(_) => true,
+            UserQuery::GetAvatar(_) => true,
+            _ => false
         }
     }
 }

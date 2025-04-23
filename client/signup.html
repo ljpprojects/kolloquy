@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Kolloquy Login</title>
+    <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="login.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   </head>
@@ -16,6 +17,7 @@
 
       <section id="login" class="register-card">
         <input id="email" type="email" placeholder="Email" aria-placeholder="Email">
+        <p class="errmsg hidden" id="emailerr">Handles must be 3-15 characters in length and contain only alphanumeric characters, _, !, $, -, ., \ and /.</p>
 
         <input id="handle" type="text" placeholder="Handle" aria-placeholder="Handle">
         <p class="errmsg hidden" id="handleerr">Handles must be 3-15 characters in length and contain only alphanumeric characters, _, !, $, -, ., \ and /.</p>
@@ -23,16 +25,19 @@
         <input id="password" type="password" placeholder="Password" aria-placeholder="Password">
         <p class="errmsg hidden" id="passerr">Passwords must be 8 characters or longer and contain at least one letter, number, and special character or punctuation.</p>
 
-        <div style="display: flex; justify-content: space-between; max-width: calc(22.5vw); gap: 1.5vw; align-items: center;">
-          <input id="age" type="range" style="min-width: calc(18vw - 1rem);" placeholder="Age" aria-placeholder="Age" min="13" max="130" value="13">
-          <p id="age-display">Age</p>
+        <div style="display: flex; justify-content: center; max-width: calc(19vw); gap: 1.5vw; align-items: center;">
+          <input step="1" id="age" type="range" style="max-width: calc(18vw + 1rem);" placeholder="Age" aria-placeholder="Age" min="13" max="130" value="13">
+          <p id="age-display" style="min-width: 4vw; max-width: 4vw">Age</p>
         </div>
+
+        <input data-action="register" type="button" id="submit" value="Next >">
       </section>
 
-      <section class="hidden register-card"></section>
+      <section id="tou" class="hidden register-card">
+        <p>To use Kolloquy, you must agree to the Terms of Use.</p>
+      </section>
 
       <section id="footer">
-        <input type="button" id="submit" onclick="register(); return false;" value="Next >">
         <p>Kolloquy v0.0.1</p>
       </section>
     </main>
@@ -45,6 +50,6 @@
       }
     </script>
 
-    <script src="dist/login.js"></script>
+    <script src="dist/register.js"></script>
   </body>
 </html>
