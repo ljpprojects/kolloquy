@@ -9,8 +9,9 @@ use std::io::Cursor;
 use poem::http::Uri;
 use reqwest::Url;
 use svg::Document;
+use crate::chat::Chat;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
     pub email: String, // user input
     pub handle: String, // user input
@@ -33,6 +34,7 @@ pub struct User {
     pub failed_login_attempts: i32, // service input
     pub locked_until: DateTime<Utc>, // service input
     pub timezone: String, // inferrable input
+    pub enrolled_chats: Vec<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -56,7 +58,8 @@ pub enum UserQuery {
     GetByID(String),
     PutToDB(User),
     UploadAvatar(User, Document),
-    GetAvatar(User)
+    GetAvatar(User),
+    UpdateRemote(User),
 }
 
 impl DBQuery for UserQuery {
@@ -72,7 +75,7 @@ impl DBQuery for UserQuery {
                 BrotliCompress(&mut read_desc, &mut compressed_desc, &Default::default()).unwrap();
 
                 (
-                    "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)".to_string(),
+                    "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)".to_string(),
                     vec![
                         user.email.clone(),
                         user.handle.clone(),
@@ -94,6 +97,42 @@ impl DBQuery for UserQuery {
                         user.failed_login_attempts.to_string(),
                         user.locked_until.to_rfc3339(),
                         user.timezone.to_string(),
+                        user.enrolled_chats.join(",")
+                    ]
+                )
+            },
+
+            Self::UpdateRemote(user) => {
+                let mut read_desc = Cursor::new(user.description.clone());
+                let mut compressed_desc = Vec::with_capacity((user.description.len() as f64 / 1.3).ceil() as usize);
+
+                BrotliCompress(&mut read_desc, &mut compressed_desc, &Default::default()).unwrap();
+
+                (
+                    "UPDATE users\nSET email = ?, handle = ?, password = ?, age = ?, country = ?, preferences = ?, suspended = ?, age_verified = ?, userid = ?, phone_number = ?, joined = ?, description = ?, last_agent = ?, last_approx_country = ?, avatar_url = ?, email_verified = ?, last_login = ?, failed_login_attempts = ?, locked_until = ?, timezone = ?, enrolled_chats = ?\nWHERE userid = ?;".to_string(),
+                    vec![
+                        user.email.clone(),
+                        user.handle.clone(),
+                        user.password.clone(),
+                        user.age.to_string(),
+                        user.country.clone(),
+                        user.preferences.clone(),
+                        (user.suspended as u8).to_string(),
+                        (user.age_verified as u8).to_string(),
+                        user.user_id.clone(),
+                        user.phone_number.clone(),
+                        user.joined.to_rfc3339(),
+                        GeneralPurpose::new(&Alphabet::new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/").unwrap(), Default::default()).encode(compressed_desc),
+                        user.last_agent.clone(),
+                        user.last_approx_country.clone(),
+                        user.avatar_url.clone(),
+                        (user.email_verified as u8).to_string(),
+                        user.last_login.to_rfc3339(),
+                        user.failed_login_attempts.to_string(),
+                        user.locked_until.to_rfc3339(),
+                        user.timezone.to_string(),
+                        user.enrolled_chats.join(","),
+                        user.user_id.clone()
                     ]
                 )
             },

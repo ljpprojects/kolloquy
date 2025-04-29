@@ -1,41 +1,45 @@
 pub(crate) mod user;
 pub(crate) mod data;
 mod logging;
+mod chat;
 
-use crate::data::{KolloquyDB, KolloquyR2, QueryError};
+use crate::chat::{Chat, ChatQuery, CreateChatBody, SocketChatAuthor, SocketChatBody};
+use crate::data::{KolloquyDB, KolloquyR2, QueryError, USER_AVATAR_BUCKET};
 use crate::logging::{LoggingFormat, LoggingMiddleware, LoggingPersistence};
 use crate::user::{AuthenticateBody, RegisterBody, User, UserQuery};
-use ammonia::UrlRelative;
-use std::io::Cursor;
+use async_std::io::WriteExt;
 use async_std::path::PathBuf;
 use async_std::sync::{Arc, RwLock};
-use awscreds::Credentials;
 use base64::alphabet::Alphabet;
 use base64::engine::GeneralPurpose;
 use base64::Engine;
 use brotli::BrotliDecompress;
 use chrono::{DateTime, TimeDelta, Utc};
 use dotenv::dotenv;
+use futures::future::join_all;
+use futures::{SinkExt, StreamExt, TryFutureExt};
 use handlebars::{Context, Handlebars};
 use poem::http::StatusCode;
 use poem::middleware::{AddData, CookieJarManager, Cors, CorsEndpoint};
 use poem::web::cookie::{CookieJar, SameSite};
+use poem::web::websocket::{Message, WebSocket};
 use poem::web::{cookie, Data, Redirect};
-use poem::Response;
 use poem::{get, handler, listener::TcpListener, web::Path, Body, EndpointExt, FromRequest, IntoResponse, Route, Server};
+use poem::{Request, Response};
 use rand::{Rng, RngCore, SeedableRng};
 use regex::Regex;
-use s3::{Bucket, Region};
+use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
-use std::env;
+use std::io::Cursor;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
-use svg::node::element::SVG;
-use svg::node::Value;
-use svg::parser::Event;
+use std::env;
+use svg::node::NodeClone;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::{Receiver, Sender};
 
 #[derive(Default, Clone)]
 pub struct ServerState {
@@ -102,7 +106,7 @@ pub fn create_avatar() -> svg::Document {
             svg::node::element::Circle::new()
                 .set("cx", "50%")
                 .set("cy", "50%")
-                .set("r", format!("{}", circ_radius))
+                .set("r", format!("{}%", circ_radius))
                 .set("fill", "#e9eaff")
         );
     
@@ -115,8 +119,12 @@ define_static_files! {
     index_css ("text/css") => "../../client/index.css",
     account_css ("text/css") => "../../client/account.css",
     login_css ("text/css") => "../../client/login.css",
+    chats_css ("text/css") => "../../client/chats.css",
+    chat_css ("text/css") => "../../client/chat.css",
     login_js ("application/javascript") => "../../client/dist/login.js",
     register_js ("application/javascript") => "../../client/dist/register.js",
+    chats_js ("application/javascript") => "../../client/dist/chats.js",
+    chat_js ("application/javascript") => "../../client/dist/chat.js",
 }
 
 #[handler]
@@ -128,18 +136,8 @@ async fn rng() -> String {
 
 const USE_NET_RAND: bool = false;
 const ACCOUNT_TEMPLATE: &str = include_str!("../../client/account.handlebars");
-
-static USER_AVATAR_BUCKET: LazyLock<Box<Bucket>, fn() -> Box<Bucket>> = LazyLock::new(|| Bucket::new(
-    "kolloquy-user-avatars",
-    Region::R2 { account_id: env::var("CLOUDFLARE_ACC_ID").unwrap() },
-    Credentials::new(
-        Some(&*env::var("R2_ACCESS_KEY").unwrap()),
-        Some(&*env::var("R2_SECRET_KEY").unwrap()),
-        None,
-        None,
-        None,
-    ).unwrap(),
-).unwrap().with_path_style());
+const CHATS_TEMPLATE: &str = include_str!("../../client/chats.handlebars");
+const CHAT_TEMPLATE: &str = include_str!("../../client/chat.handlebars");
 
 static UID_REGEX: LazyLock<Regex, fn() -> Regex> = LazyLock::new(|| Regex::from_str(r"[a-z]{2}+\d{2}+[a-z]{3}+").unwrap());
 static UID_FILTERING_REGEX: LazyLock<Regex, fn() -> Regex> = LazyLock::new(|| Regex::from_str(r"([a-z])[^a-z]*([a-z])[^a-z]*(\d)[^\d]*(\d)[^\d]*([a-z])[^a-z]*([a-z])[^a-z]*([a-z])[^a-z]*").unwrap());
@@ -204,7 +202,219 @@ async fn random_session_id() -> String {
 }
 
 #[handler]
-async fn account_page(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response {
+async fn user_page(Path(mut handle): Path<String>) -> Response {
+    if handle.starts_with("@") {
+        handle.remove(0);
+    }
+
+    let db = KolloquyDB::new();
+    let query = UserQuery::GetByHandle(handle.clone());
+
+    let user = match db.execute(&query).await {
+        Ok(user) => user.unwrap(),
+        Err(QueryError::NotFound) => {
+            let error_json = json!({
+                "success": false,
+                "error": {
+                    "code": 100,
+                    "message": "A user with this handle does not exist."
+                }
+            });
+
+            return (StatusCode::BAD_REQUEST, serde_json::to_string(&error_json).unwrap()).into_response();
+        },
+        Err(e) => {
+            let error_json = json!({
+                "success": false,
+                "error": {
+                    "code": 300,
+                    "message": "Could not access database.",
+                    "details": format!("{:?}", e)
+                }
+            });
+
+            return (StatusCode::INTERNAL_SERVER_ERROR, serde_json::to_string(&error_json).unwrap()).into_response();
+        }
+    };
+
+    let r2 = KolloquyR2::new(*USER_AVATAR_BUCKET.clone());
+    let query = UserQuery::GetAvatar(user.clone());
+
+    let mut compressed_avatar = Cursor::new(r2.execute(&query).await.unwrap().to_vec());
+    let mut avatar = Cursor::new(Vec::new());
+
+    BrotliDecompress(&mut compressed_avatar, &mut avatar).unwrap();
+
+    let avatar_string = String::from_utf8(avatar.into_inner()).unwrap();
+
+    let engine = Handlebars::new();
+    let context = Context::from(json!({
+        "user": {
+            "avatar": avatar_string,
+            "handle": user.handle,
+            "joined": user.joined.to_rfc3339(),
+        },
+        "not_self": true
+    }));
+
+    let rendered = engine.render_template_with_context(ACCOUNT_TEMPLATE, &context).unwrap();
+
+    Response::builder()
+        .body(rendered)
+        .set_content_type("text/html")
+        .with_status(StatusCode::OK)
+        .into_response()
+}
+
+#[handler]
+async fn user_chats(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response {
+    let Some(mut sid) = jar.get("SSID").map(|cookie| (&cookie.to_string()[5..]).to_string()) else {
+        return Redirect::temporary("/login").into_response();
+    };
+    
+    sid = sid.replace("%22", "");
+    sid = sid.replace("%2F", "/");
+
+    let state_read = state.open_sessions.read().await;
+
+    let Some((user, session_started)) = state_read.get(&sid) else {
+        return Redirect::temporary("/login").into_response();
+    };
+
+    if Utc::now().naive_local() - session_started.naive_local() > TimeDelta::minutes(30) {
+        state.open_sessions.write().await.remove(&sid);
+
+        return Redirect::temporary("/login").into_response();
+    }
+
+    let Some(chats) = join_all(user.enrolled_chats.iter().map(async |id| Chat::from_remote(id.clone()).await)).await.into_iter().collect::<Option<Vec<_>>>() else {
+        let context = Context::from(json!({
+            "chats": [],
+        }));
+
+        let engine = Handlebars::new();
+
+        let rendered = engine.render_template_with_context(CHATS_TEMPLATE, &context).unwrap();
+
+        return Response::builder()
+            .body(rendered)
+            .set_content_type("text/html")
+            .with_status(StatusCode::OK)
+            .into_response();
+    };
+
+    let Some(chat_icons) = join_all(chats.iter().map(async |chat| {
+        let mut compressed = Cursor::new(USER_AVATAR_BUCKET.deref().get_object(&chat.icon_url).await.ok()?.into_bytes());
+        let mut avatar = Cursor::new(Vec::new());
+
+        BrotliDecompress(&mut compressed, &mut avatar).unwrap();
+
+        Some(String::from_utf8(avatar.into_inner()).unwrap())
+    })).await.into_iter().collect::<Option<Vec<_>>>() else {
+        let context = Context::from(json!({
+            "chats": [],
+        }));
+
+        let engine = Handlebars::new();
+
+        let rendered = engine.render_template_with_context(CHATS_TEMPLATE, &context).unwrap();
+
+        return Response::builder()
+            .body(rendered)
+            .set_content_type("text/html")
+            .with_status(StatusCode::OK)
+            .into_response();
+    };
+
+    let json_chats = chats.iter().enumerate().map(|(i, chat)| json!({
+        "name": chat.name,
+        "messages": chat.messages.iter().map(|m| m.content.get(0).unwrap().clone()).collect::<Vec<String>>(),
+        "icon": chat_icons.get(i).unwrap().clone(),
+    })).collect::<Vec<_>>();
+
+    let context = Context::from(json!({
+        "chats": json_chats,
+    }));
+
+    let engine = Handlebars::new();
+
+    let rendered = engine.render_template_with_context(CHATS_TEMPLATE, &context).unwrap();
+
+    Response::builder()
+        .body(rendered)
+        .set_content_type("text/html")
+        .with_status(StatusCode::OK)
+        .into_response()
+}
+
+#[handler]
+async fn chat_socket(
+    ws: WebSocket,
+    sender: Data<&Sender<SocketChatBody>>,
+) -> Response {
+    let sender = sender.clone();
+    let mut receiver = sender.subscribe();
+
+    ws.on_upgrade(move |socket| async move {
+        let (mut sink, mut stream) = socket.split();
+
+        tokio::spawn(async move {
+            while let Some(Ok(msg)) = stream.next().await {
+                if let Message::Text(json) = msg {
+                    let body: SocketChatBody = serde_json::from_str(&json).unwrap();
+
+                    let filled_author = SocketChatAuthor {
+                        id: body.author.id.clone(),
+                        is_self: false,
+                        handle: body.author.handle,
+                        avatar: {
+                            let db = KolloquyDB::new();
+                            let query = UserQuery::GetByID(body.author.id);
+                            let author = db.execute(&query).await.unwrap().unwrap();
+
+                            let r2 = KolloquyR2::new(*(*USER_AVATAR_BUCKET).clone());
+                            let query = UserQuery::GetAvatar(author);
+
+                            let mut compressed_avatar = Cursor::new(r2.execute(&query).await.unwrap().to_vec());
+                            let mut avatar = Cursor::new(Vec::new());
+
+                            BrotliDecompress(&mut compressed_avatar, &mut avatar).unwrap();
+
+                            String::from_utf8(avatar.into_inner()).unwrap()
+                        },
+                    };
+
+                    let response = match &*body.action {
+                        "PUT" => SocketChatBody {
+                            content: body.content,
+                            action: "PUT".into(),
+                            author: filled_author,
+                            chat: body.chat.clone(),
+                        },
+                        _ => unreachable!(),
+                    };
+
+                    if sender.send(response).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        tokio::spawn(async move {
+            while let Ok(msg) = receiver.recv().await {
+                println!("{}", serde_json::to_string(&msg).unwrap());
+
+                if sink.send(Message::Text(serde_json::to_string(&msg).unwrap())).await.is_err() {
+                    break;
+                }
+            }
+        });
+    }).into_response()
+}
+
+#[handler]
+async fn user_chat(Path(id): Path<String>, jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response {
     let Some(mut sid) = jar.get("SSID").map(|cookie| (&cookie.to_string()[5..]).to_string()) else {
         return Redirect::temporary("/login").into_response();
     };
@@ -224,11 +434,187 @@ async fn account_page(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Respon
         return Redirect::temporary("/login").into_response();
     }
 
-    println!("{sid:?}");
+    if !user.enrolled_chats.contains(&id) {
+        let error_json = json!({
+            "success": false,
+            "error": {
+                "code": 1,
+                "message": "This user is not a part of this chat.",
+            }
+        });
+
+        return (StatusCode::BAD_REQUEST, serde_json::to_string(&error_json).unwrap()).into_response();
+    }
+
+    let Some(chat) = Chat::from_remote(id.clone()).await else {
+        let error_json = json!({
+            "success": false,
+            "error": {
+                "code": 205,
+                "message": "A chat with this ID does not exist.",
+            }
+        });
+
+        return (StatusCode::BAD_REQUEST, serde_json::to_string(&error_json).unwrap()).into_response();
+    };
+
+    let messages_json = join_all(chat.messages.iter().map(async |m| {
+        let r2 = KolloquyR2::new(*USER_AVATAR_BUCKET.clone());
+        let query = UserQuery::GetAvatar(m.author.clone());
+
+        let mut compressed_avatar = Cursor::new(r2.execute(&query).await.unwrap().to_vec());
+
+        let mut avatar = Vec::new();
+
+        BrotliDecompress(&mut compressed_avatar, &mut avatar).unwrap();
+
+        json!({
+            "is_sender": m.author.user_id == user.user_id,
+            "author": {
+                "handle": m.author.handle,
+                "id": m.author.user_id,
+                "avatar": String::from_utf8(avatar).unwrap()
+            },
+            "content": m.content[0].clone()
+        })
+    })).await;
+
+    let context = Context::from(json!({
+        "messages": messages_json,
+        "id": chat.id,
+        "self": {
+            "id": user.user_id,
+            "handle": user.handle
+        },
+    }));
+
+    let engine = Handlebars::new();
+
+    let rendered = engine.render_template_with_context(CHAT_TEMPLATE, &context).unwrap();
+
+    Response::builder()
+        .body(rendered)
+        .set_content_type("text/html")
+        .with_status(StatusCode::OK)
+        .into_response()
+}
+
+#[handler]
+async fn create_chat(body: Body, jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response {
+    let body_str = body.into_string().await.unwrap();
+
+    let Ok(body) = serde_json::from_str::<CreateChatBody>(&*body_str) else {
+        let binding = format!(r#"
+Expected JSON to match schema:
+{{
+    "participants": "string[]",
+    "name": "string",
+}}
+
+Got JSON:
+{}
+"#, body_str);
+
+        let details = binding.trim();
+
+        let error_json = json!({
+            "success": false,
+            "error": {
+                "code": 200,
+                "message": "Invalid schema for JSON body",
+                "details": details,
+            }
+        });
+
+        return (StatusCode::BAD_REQUEST, serde_json::to_string(&error_json).unwrap()).into_response();
+    };
+
+    let Some(mut sid) = jar.get("SSID").map(|cookie| (&cookie.to_string()[5..]).to_string()) else {
+        return Redirect::temporary("/login").into_response();
+    };
+
+    sid = sid.replace("%22", "");
+    sid = sid.replace("%2F", "/");
+
+    let mut state_read = state.open_sessions.write().await;
+
+    let Some(&mut (ref mut user, ref mut session_started)) = state_read.get_mut(&sid) else {
+        return Redirect::temporary("/login").into_response();
+    };
+
+    if Utc::now().naive_local() - session_started.naive_local() > TimeDelta::minutes(30) {
+        state.open_sessions.write().await.remove(&sid);
+
+        return Redirect::temporary("/login").into_response();
+    }
+
+    if body.name.len() > 20 {
+        let error_json = json!({
+            "success": false,
+            "error": {
+                "code": 206,
+                "message": "Chat name is too long.",
+            }
+        });
+
+        return (StatusCode::BAD_REQUEST, serde_json::to_string(&error_json).unwrap()).into_response();
+    }
+
+    let cleaned_name = ammonia::clean_text(&body.name);
+    let cleaned_participants = join_all(body.participants.iter().map(|p| ammonia::clean_text(p)).map(async |mut handle| {
+        if handle.starts_with("@") {
+            handle = handle[1..].to_string()
+        }
+
+        let db = KolloquyDB::new();
+        let query = UserQuery::GetByHandle(handle);
+
+        db.execute(&query).await.unwrap().unwrap()
+    })).await;
+
+    let (mut chat, ref icon) = Chat::new(cleaned_name).await;
+
+    chat.execute(&mut ChatQuery::PutChat).await;
+    chat.execute(&mut ChatQuery::PutIcon(Clone::clone(&icon))).await;
+    chat.execute(&mut ChatQuery::AddParticipant(user)).await;
+
+    for mut user in cleaned_participants {
+        chat.execute(&mut ChatQuery::AddParticipant(&mut user)).await;
+    }
+
+    let success_json = json!({
+        "success": true,
+        "id": chat.id,
+        "icon": icon.to_string(),
+    });
+
+    Response::builder()
+        .body(serde_json::to_string(&success_json).unwrap())
+        .set_content_type("application/json")
+        .with_status(StatusCode::CREATED)
+        .into_response()
+}
+
+#[handler]
+async fn account_page(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response {
+    let Some(mut sid) = jar.get("SSID").map(|cookie| (&cookie.to_string()[5..]).to_string()) else {
+        return Redirect::temporary("/login").into_response();
+    };
+
+    sid = sid.replace("%22", "");
+    sid = sid.replace("%2F", "/");
 
     let state_read = state.open_sessions.read().await;
 
-    let (user, session_started) = state_read.get(&sid).unwrap();
+    let Some((user, session_started)) = state_read.get(&sid) else {
+        return Redirect::temporary("/login").into_response();
+    };
+
+    if Utc::now().naive_local() - session_started.naive_local() > TimeDelta::minutes(30) {
+        state.open_sessions.write().await.remove(&sid);
+
+        return Redirect::temporary("/login").into_response();
+    }
     
     let r2 = KolloquyR2::new(*USER_AVATAR_BUCKET.clone());
     let query = UserQuery::GetAvatar(user.clone());
@@ -246,7 +632,8 @@ async fn account_page(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Respon
             "avatar": avatar_string,
             "handle": user.handle,
             "joined": user.joined.naive_local().to_string(),
-        }
+        },
+        "not_self": false,
     }));
 
     let rendered = engine.render_template_with_context(ACCOUNT_TEMPLATE, &context).unwrap();
@@ -460,6 +847,7 @@ Got JSON:
         failed_login_attempts: 0,
         locked_until: DateTime::<Utc>::from_timestamp_millis(0).unwrap(),
         timezone: "NULL".to_string(),
+        enrolled_chats: vec![],
     };
 
     // Check the email against the RFC 5233 regex
@@ -638,6 +1026,12 @@ fn apply_cors(app: Route) -> CorsEndpoint<Route> {
     app.with(Cors::new().allow_origins(allowed_origins))
 }
 
+#[handler]
+async fn index() -> Response {
+    Redirect::temporary("/account")
+        .into_response()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     dotenv().ok();
@@ -650,7 +1044,14 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/account.css", get(account_css))
         .at("/dist/login.js", get(login_js))
         .at("/dist/register.js", get(register_js))
-        .at("/account", get(account_page));
+        .at("/dist/chats.js", get(chats_js))
+        .at("/dist/chat.js", get(chat_js))
+        .at("/account", get(account_page))
+        .at("/user/:handle", get(user_page))
+        .at("/chats.css", get(chats_css))
+        .at("/chat.css", get(chat_css))
+        .at("/chats", get(user_chats))
+        .at("/chat/:id", get(user_chat));
     
     let app = apply_cors(Route::new()
         .nest(
@@ -658,7 +1059,9 @@ async fn main() -> Result<(), std::io::Error> {
             user_facing,
         )
         .at("/register", register_user)
-        .at("/auth", authenticate_user))
+        .at("/auth", authenticate_user)
+        .at("/create", create_chat)
+        .at("/chatws", chat_socket))
         .with(LoggingMiddleware {
             persistence: LoggingPersistence::LogFileOnly(PathBuf::from("logs/log.txt")),
             format: LoggingFormat::LBL,
@@ -677,7 +1080,7 @@ async fn main() -> Result<(), std::io::Error> {
             .run(app)
             .await
     } else if env::var_os("DEV").is_some() && use_ipv6 {
-        println!("{}", format!("[{}]:8080", env::var("DEV_IPV4").unwrap()));
+        println!("{}", format!("[{}]:8080", env::var("DEV_IPV6").unwrap()));
 
         Server::new(TcpListener::bind(format!("[{}]:8080", env::var("DEV_IPV6").unwrap())))
             .run(app)

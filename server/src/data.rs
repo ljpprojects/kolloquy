@@ -2,13 +2,39 @@ use crate::user::User;
 use chrono::DateTime;
 use s3::error::S3Error;
 use s3::request::ResponseData;
-use s3::Bucket;
+use s3::{Bucket, Region};
 use serde_json::{json, Map, Value};
 use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::sync::LazyLock;
+use awscreds::Credentials;
+
+pub static USER_AVATAR_BUCKET: LazyLock<Box<Bucket>, fn() -> Box<Bucket>> = LazyLock::new(|| Bucket::new(
+    "kolloquy-user-avatars",
+    Region::R2 { account_id: env::var("CLOUDFLARE_ACC_ID").unwrap() },
+    Credentials::new(
+        Some(&*env::var("R2_ACCESS_KEY").unwrap()),
+        Some(&*env::var("R2_SECRET_KEY").unwrap()),
+        None,
+        None,
+        None,
+    ).unwrap(),
+).unwrap().with_path_style());
+
+pub static KOLLOQUY_CHATS_BUCKET: LazyLock<Box<Bucket>, fn() -> Box<Bucket>> = LazyLock::new(|| Bucket::new(
+    "kolloquy-chats",
+    Region::R2 { account_id: env::var("CLOUDFLARE_ACC_ID").unwrap() },
+    Credentials::new(
+        Some(&*env::var("R2_ACCESS_KEY").unwrap()),
+        Some(&*env::var("R2_SECRET_KEY").unwrap()),
+        None,
+        None,
+        None,
+    ).unwrap(),
+).unwrap().with_path_style());
 
 pub enum R2QueryKind {
     PutObject(Vec<u8>),
@@ -122,6 +148,8 @@ impl<'a> KolloquyDB<'a> {
             .map_err(|e| QueryError::Other(Box::new(e)))?).unwrap();
 
         if !json.get("success").unwrap().as_bool().unwrap() {
+            eprintln!("{json:#?}");
+
             return Err(QueryError::ServerError);
         }
         
@@ -164,6 +192,7 @@ impl<'a> KolloquyDB<'a> {
             failed_login_attempts: results["failed_login_attempts"].as_number().unwrap().as_u64().unwrap() as i32,
             locked_until: DateTime::from_str(results["locked_until"].as_str().unwrap()).unwrap(),
             timezone: results["timezone"].as_str().unwrap().to_string(),
+            enrolled_chats: results["enrolled_chats"].as_str().unwrap().split(",").map(|s| s.to_string()).collect(),
         };
 
         Ok(Some(user))
@@ -239,6 +268,7 @@ mod tests {
             failed_login_attempts: 0,
             locked_until: Default::default(),
             timezone: "".to_string(),
+            enrolled_chats: vec![]
         };
 
         let query = UserQuery::UploadAvatar(user, create_avatar());
