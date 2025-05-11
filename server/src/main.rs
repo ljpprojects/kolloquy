@@ -7,9 +7,6 @@ use crate::chat::{Chat, ChatQuery, CreateChatBody, SocketChatAuthor, SocketChatB
 use crate::data::{KolloquyDB, KolloquyR2, QueryError, USER_AVATAR_BUCKET};
 use crate::logging::{LoggingFormat, LoggingMiddleware, LoggingPersistence};
 use crate::user::{AuthenticateBody, RegisterBody, User, UserQuery};
-use async_std::io::WriteExt;
-use async_std::path::PathBuf;
-use async_std::sync::{Arc, RwLock};
 use base64::alphabet::Alphabet;
 use base64::engine::GeneralPurpose;
 use base64::Engine;
@@ -25,21 +22,21 @@ use poem::web::cookie::{CookieJar, SameSite};
 use poem::web::websocket::{Message, WebSocket};
 use poem::web::{cookie, Data, Redirect};
 use poem::{get, handler, listener::TcpListener, web::Path, Body, EndpointExt, FromRequest, IntoResponse, Route, Server};
-use poem::{Request, Response};
+use poem::Response;
 use rand::{Rng, RngCore, SeedableRng};
 use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
+use std::env;
 use std::io::Cursor;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use std::env;
-use svg::node::NodeClone;
-use tokio::sync::broadcast;
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::{broadcast, RwLock};
+use tokio::sync::broadcast::Sender;
 
 #[derive(Default, Clone)]
 pub struct ServerState {
@@ -290,6 +287,9 @@ async fn user_chats(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response
     let Some(chats) = join_all(user.enrolled_chats.iter().map(async |id| Chat::from_remote(id.clone()).await)).await.into_iter().collect::<Option<Vec<_>>>() else {
         let context = Context::from(json!({
             "chats": [],
+            "debug_info": {
+                "chat_count": 0
+            }
         }));
 
         let engine = Handlebars::new();
@@ -304,6 +304,8 @@ async fn user_chats(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response
     };
 
     let Some(chat_icons) = join_all(chats.iter().map(async |chat| {
+        eprintln!("REMOTE URL {}", chat.icon_url);
+
         let mut compressed = Cursor::new(USER_AVATAR_BUCKET.deref().get_object(&chat.icon_url).await.ok()?.into_bytes());
         let mut avatar = Cursor::new(Vec::new());
 
@@ -330,6 +332,7 @@ async fn user_chats(jar: &CookieJar, state: Data<&Arc<ServerState>>) -> Response
         "name": chat.name,
         "messages": chat.messages.iter().map(|m| m.content.get(0).unwrap().clone()).collect::<Vec<String>>(),
         "icon": chat_icons.get(i).unwrap().clone(),
+        "id": chat.id,
     })).collect::<Vec<_>>();
 
     let context = Context::from(json!({
@@ -360,8 +363,8 @@ async fn chat_socket(
 
         tokio::spawn(async move {
             while let Some(Ok(msg)) = stream.next().await {
-                if let Message::Text(json) = msg {
-                    let body: SocketChatBody = serde_json::from_str(&json).unwrap();
+                if let Message::Text(ref json) = msg {
+                    let body: SocketChatBody = serde_json::from_str(json).unwrap();
 
                     let filled_author = SocketChatAuthor {
                         id: body.author.id.clone(),
@@ -369,7 +372,7 @@ async fn chat_socket(
                         handle: body.author.handle,
                         avatar: {
                             let db = KolloquyDB::new();
-                            let query = UserQuery::GetByID(body.author.id);
+                            let query = UserQuery::GetByID(body.author.id.clone());
                             let author = db.execute(&query).await.unwrap().unwrap();
 
                             let r2 = KolloquyR2::new(*(*USER_AVATAR_BUCKET).clone());
@@ -386,7 +389,7 @@ async fn chat_socket(
 
                     let response = match &*body.action {
                         "PUT" => SocketChatBody {
-                            content: body.content,
+                            content: body.content.clone(),
                             action: "PUT".into(),
                             author: filled_author,
                             chat: body.chat.clone(),
@@ -397,6 +400,21 @@ async fn chat_socket(
                     if sender.send(response).is_err() {
                         break;
                     }
+
+                    tokio::spawn(async move {
+                        let mut chat = Chat::from_remote(body.chat).await.unwrap();
+
+                        chat.messages.push(chat::Message {
+                            content: vec![body.content],
+                            author: body.author.id,
+                            sent: Utc::now(),
+                            id: chat.messages.len() as u64,
+                        });
+
+                        let mut query = ChatQuery::PutChat;
+
+                        chat.execute(&mut query).await;
+                    });
                 }
             }
         });
@@ -459,8 +477,12 @@ async fn user_chat(Path(id): Path<String>, jar: &CookieJar, state: Data<&Arc<Ser
     };
 
     let messages_json = join_all(chat.messages.iter().map(async |m| {
+        let db = KolloquyDB::new();
+        let query = UserQuery::GetByID(m.author.clone());
+        let author = db.execute(&query).await.unwrap().unwrap();
+
         let r2 = KolloquyR2::new(*USER_AVATAR_BUCKET.clone());
-        let query = UserQuery::GetAvatar(m.author.clone());
+        let query = UserQuery::GetAvatar(author.clone());
 
         let mut compressed_avatar = Cursor::new(r2.execute(&query).await.unwrap().to_vec());
 
@@ -469,10 +491,10 @@ async fn user_chat(Path(id): Path<String>, jar: &CookieJar, state: Data<&Arc<Ser
         BrotliDecompress(&mut compressed_avatar, &mut avatar).unwrap();
 
         json!({
-            "is_sender": m.author.user_id == user.user_id,
+            "is_sender": author.user_id == user.user_id,
             "author": {
-                "handle": m.author.handle,
-                "id": m.author.user_id,
+                "handle": author.handle,
+                "id": author.user_id,
                 "avatar": String::from_utf8(avatar).unwrap()
             },
             "content": m.content[0].clone()
@@ -723,7 +745,7 @@ Got JSON:
             if Utc::now().naive_local() - session_started.naive_local() > TimeDelta::minutes(30) {
                 state.open_sessions.write().await.remove(&sid);
             } else {
-                return Redirect::temporary("/account")
+                return Redirect::permanent(body.redirect)
                     .with_status(StatusCode::OK)
                     .into_response();
             }
@@ -777,8 +799,6 @@ Got JSON:
 
     state.open_sessions.write().await.insert(sid.clone(), (user.clone(), Utc::now()));
 
-    println!("{:?}", state.open_sessions.read().await);
-
     let mut cookie = cookie::Cookie::new("SSID", sid.clone());
 
     cookie.set_same_site(SameSite::Strict);
@@ -787,7 +807,7 @@ Got JSON:
 
     jar.add(cookie);
 
-    Redirect::temporary("/account")
+    Redirect::permanent(body.redirect)
         .with_status(StatusCode::OK)
         .into_response()
 }
@@ -993,35 +1013,9 @@ Got JSON:
 
 }
 
+/// Allows origins matching the regex /(https|wss):\/\/(www\.)kolloquy\.com/
 fn apply_cors(app: Route) -> CorsEndpoint<Route> {
-    let mut allowed_origins = vec![];
-
-    // check if we are in a development environment
-    if env::var_os("DEV").is_some() {
-        // If we are using secure, do NOT allow http:// origins
-        let using_secure = env::var_os("DEV_SECURE").is_some();
-
-        // Allow ONLY developer origins, no production origins
-        env::var_os("DEV_ORIGINS").unwrap().to_str().unwrap().split(',').map(ToString::to_string).for_each(|origin| {
-            if using_secure {
-                allowed_origins.push(format!("https://{origin}"))
-            } else {
-                allowed_origins.push(format!("http://{origin}"))
-            }
-        });
-    } else {
-        // If we are using secure, do NOT allow http:// origins
-        let using_secure = env::var_os("PROD_SECURE").is_some();
-
-        // Allow ONLY production origins, no developer origins
-        env::var_os("PROD_ORIGINS").unwrap().to_str().unwrap().split(',').map(ToString::to_string).for_each(|origin| {
-            if using_secure {
-                allowed_origins.push(format!("https://{origin}"))
-            } else {
-                allowed_origins.push(format!("http://{origin}"))
-            }
-        });
-    }
+    let allowed_origins = vec!["https://kolloquy.com".to_string(), "https://www.kolloquy.com".to_string(), "wss://kolloquy.com".to_string(), "wss://www.kolloquy.com".to_string()];
     
     app.with(Cors::new().allow_origins(allowed_origins))
 }
@@ -1037,6 +1031,7 @@ async fn main() -> Result<(), std::io::Error> {
     dotenv().ok();
     
     let user_facing = Route::new()
+        .at("/", get(index))
         .at("/signup", get(signup_page))
         .at("/login", get(login_page))
         .at("/login.css", get(login_css))
@@ -1052,6 +1047,8 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/chat.css", get(chat_css))
         .at("/chats", get(user_chats))
         .at("/chat/:id", get(user_chat));
+
+    tracing_subscriber::fmt::init();
     
     let app = apply_cors(Route::new()
         .nest(
@@ -1061,155 +1058,20 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/register", register_user)
         .at("/auth", authenticate_user)
         .at("/create", create_chat)
-        .at("/chatws", chat_socket))
+        .at("/chatws", get(chat_socket.data(broadcast::channel::<SocketChatBody>(500).0))))
         .with(LoggingMiddleware {
             persistence: LoggingPersistence::LogFileOnly(PathBuf::from("logs/log.txt")),
             format: LoggingFormat::LBL,
         })
         .with(AddData::new(Arc::new(ServerState::default())))
         .with(CookieJarManager::new());
-    
-    let use_ipv6 = env::var_os("USE_IPV6").is_some();
-    
-    if env::var_os("DEV").is_some() && !use_ipv6 {
-        let addr = format!("{}:8080", env::var("DEV_IPV4").unwrap());
-        
-        println!("{}", format!("{}:8080", env::var("DEV_IPV4").unwrap()));
-        
-        Server::new(TcpListener::bind(addr))
-            .run(app)
-            .await
-    } else if env::var_os("DEV").is_some() && use_ipv6 {
-        println!("{}", format!("[{}]:8080", env::var("DEV_IPV6").unwrap()));
 
-        Server::new(TcpListener::bind(format!("[{}]:8080", env::var("DEV_IPV6").unwrap())))
-            .run(app)
-            .await
-    } else {
-        println!("{}", format!("{}:80", env::var("PROD_IPV4").unwrap()));
+    let local_ip = env::var("IPV6").unwrap();
+    let addr = env::var("ACTIVE_SERVER").unwrap().replace("@", &*format!("[{local_ip}]"));
 
-        Server::new(TcpListener::bind(format!("{}:80", env::var("PROD_IPV4").unwrap())))
-            .run(app)
-            .await
-    }
-}
+    eprintln!("Server running at {addr}");
 
-mod tests {
-    use crate::data::KolloquyDB;
-    use crate::user::UserQuery;
-    use crate::{random_session_id, random_user_id, ACCOUNT_TEMPLATE, EMAIL_REGEX};
-    use ammonia::UrlRelative;
-    use dotenv::dotenv;
-    use handlebars::{Context, Handlebars};
-    use serde_json::json;
-    use std::ops::Deref;
-
-    #[tokio::test]
-    async fn rand_user_ids() {
-        let mut prev = vec![];
-
-        for i in 0..10 {
-            let id = random_user_id().await;
-
-            if prev.contains(&id) {
-                panic!("Duplicates detected.")
-            }
-
-            println!("{id}");
-
-            prev.push(id);
-        }
-    }
-
-    #[tokio::test]
-    async fn rand_session_ids() {
-        let mut prev = vec![];
-
-        for i in 0..100_000 {
-            let id = random_session_id().await;
-
-            if prev.contains(&id) {
-                eprintln!("{id}");
-                eprintln!("{prev:?}");
-                panic!("Duplicates detected.")
-            }
-
-            println!("{id}");
-
-            prev.push(id);
-        }
-    }
-
-    #[test]
-    fn email_regex() -> Result<(), ()> {
-        let email = "owne@r@ljpprojects.org";
-
-        if EMAIL_REGEX.deref().is_match(&email) {
-            Err(())
-        } else {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn ammonia() -> Result<(), ()> {
-        let engine = Handlebars::new();
-
-        let context = Context::from(json!({
-            "user": {
-                "avatar": r#"<svg height="200px" viewBox="0 0 200 200" width="200px" style="text-anchor: middle; dominant-baseline: middle; background: linear-gradient(135deg, hsl(335deg, 87%, 46%), hsl(25deg, 87%, 46%))" xmlns="http://www.w3.org/2000/svg"><filter id='noiseFilter'><feTurbulence type='fractalNoise' baseFrequency='5' numOctaves='10' stitchTiles='noStitch'/></filter><rect filter="url(#noiseFilter)" opacity="90%" height="100%" width="100%"/><circle cx="50%" cy="50%" r="25%" fill="\#e9eaff"/></svg>"#,
-                "handle": "ljpprojects",
-                "joined": "2025-04-22T03:13:34.076305+00:00 (22/04/2025, 13:13:34 pm)"
-            }
-        }));
-
-        let rendered = engine.render_template_with_context(ACCOUNT_TEMPLATE, &context).unwrap();
-
-        let cleaned = ammonia::Builder::new()
-            .link_rel(None)
-            .url_relative(UrlRelative::PassThrough)
-            .strip_comments(true)
-            .generic_attributes(["id"].into())
-            .add_tags(["svg", "circle", "filter", "feTurbulence", "section", "main", "rect"])
-            .add_tag_attributes("svg", ["style", "height", "viewBox", "width", "xmlns"])
-            .add_tag_attributes("feTurbulence", ["type", "baseFrequency", "numOctaves", "stitchTiles", "xmlns"])
-            .add_tag_attributes("rect", ["style", "filter", "opacity", "height", "width", "fill"])
-            .add_tag_attributes("circle", ["cx", "cy", "r", "fill"])
-            .clean(&rendered);
-
-        /*
-        <svg
-            height="200px"
-            viewBox="0 0 200 200"
-            width="200px"
-            style="text-anchor: middle; dominant-baseline: middle; background: linear-gradient(135deg, hsl(335deg, 87%, 46%), hsl(25deg, 87%, 46%))"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            <filter id='noiseFilter'>
-                <feTurbulence
-                        type='fractalNoise'
-                        baseFrequency='5'
-                        numOctaves='10'
-                        stitchTiles='noStitch'/>
-            </filter>
-            <rect filter="url(#noiseFilter)" opacity="90%" height="100%" width="100%"/><circle cx="50%" cy="50%" r="25%" fill="#e9eaff"/>
-        </svg>
-        */
-
-        println!("{}", cleaned.to_string());
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn get_user() {
-        let handle = "ljpprojects";
-
-        dotenv().ok();
-
-        let db = KolloquyDB::new();
-        let query = UserQuery::GetByHandle(handle.parse().unwrap());
-
-        println!("{:#?}", db.execute(&query).await)
-    }
+    Server::new(TcpListener::bind(addr))
+        .run(app)
+        .await
 }

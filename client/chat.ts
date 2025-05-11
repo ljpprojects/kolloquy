@@ -13,9 +13,9 @@ interface KolloquyMessageData {
 }
 
 const chatID = (document.getElementById("chatid")!! as HTMLDataElement).value;
-const author = (document.getElementById("author")!! as HTMLDataElement).value;
+const author: KolloquyAuthor = JSON.parse((document.getElementById("author")!! as HTMLDataElement).value);
 
-const socket = new WebSocket("ws://192.168.0.83:8080/chatws");
+const socket = new WebSocket("wss://kolloquy.com/chatws");
 
 const messages = document.getElementById("info")!! as HTMLDivElement;
 const sendButton = document.getElementById("send")!! as HTMLButtonElement;
@@ -37,6 +37,8 @@ sendButton.addEventListener("click", () => {
 socket.addEventListener("message", (e) => {
     const data = JSON.parse(e.data) as KolloquyMessageData
 
+    console.log(data)
+
     if (data.chat != chatID) {
         return false
     }
@@ -47,7 +49,7 @@ socket.addEventListener("message", (e) => {
 
             div.classList.add("chat")
 
-            if (data.author.is_self) {
+            if (data.author.is_self || data.author.id == author.id) {
                 div.style.marginLeft = "5vw"
             } else {
                 div.style.marginRight = "5vw"
@@ -71,6 +73,8 @@ socket.addEventListener("message", (e) => {
 
             div.appendChild(div2)
             div.appendChild(avatar)
+
+            messages.append(div)
 
             break;
     }

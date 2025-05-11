@@ -1,5 +1,6 @@
 const chatCreate = document.getElementById('chatcreate');
 const participantsList = document.getElementById('inlineParticipants');
+const participants: string[] = []
 const chatName = document.getElementById('chatname') as HTMLInputElement;
 const participantInput = document.getElementById('participantInput') as HTMLInputElement;
 
@@ -15,6 +16,7 @@ participantInput.addEventListener("change", () => {
     const sanitised = DOMPurify.sanitize(participantInput.value);
 
     participantsList!!.innerHTML += `<p class="inlineParticipant">${sanitised[0] == "@" ? sanitised : "@" + sanitised}</p>`
+    participants.push(sanitised[0] == "@" ? sanitised : "@" + sanitised)
 })
 
 chatCreate?.addEventListener("click", async () => {
@@ -23,7 +25,7 @@ chatCreate?.addEventListener("click", async () => {
     }
 
     const data = {
-        participants: [...participantsList!!.children].filter(e => e.tagName == "p").map(e => e.textContent),
+        participants,
         name: chatName.value,
     }
 

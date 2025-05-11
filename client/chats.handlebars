@@ -16,6 +16,8 @@
         <a href="/account"><</a> <h1>Kolloquy</h1>
     </section>
 
+    <b>DEBUG: {{debug.chat_count}}</b>
+
     <section id="info">
         <div class="chat">
             <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
@@ -35,9 +37,11 @@
             <div class="chat" id="{{chat.id}}">
                 {{#with chat}}
                     <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
-                        <b>{{name}}</b>
-                        {{#each messages}}
-                            <p>{{@last}}</p>
+                        <b>{{{name}}}</b>
+                        {{#each messages as | message |}}
+                            {{#if @last}}
+                                <p>{{message}}</p>
+                            {{/if}}
                         {{/each}}
                     </div>
 

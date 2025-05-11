@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Kolloquy Chats</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="chat.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+<main>
+    <section id="header">
+        <a href="/chats"><</a> <h1>Chat Name</h1>
+    </section>
+
+    <section id="info" style="gap: 3vh;">
+        <div class="chat" style="margin-left: 5vw">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b style="margin: 0">@ljpprojects</b>
+                <p style="margin: 0">Hello!</p>
+            </div>
+
+            <span id="0ii84lvd">
+                <svg height="100px" style="background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                    <filter id="noise">
+                        <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"/>
+                    </filter>
+                    <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"/>
+                    <circle cx="50%" cy="50%" fill="#e9eaff" r="31%"/>
+                </svg>
+            </span>
+        </div>
+
+        <div class="chat" style="margin-right: 5vw">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b style="margin: 0">@Hughjass</b>
+                <p style="margin: 0">wow</p>
+            </div>
+
+            <svg height="100px" style="background: linear-gradient(135deg, hsl(232,86%,42%), hsl(278,86%,42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"/>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"/>
+                <circle cx="50%" cy="50%" fill="#e9eaff" r="31"/>
+            </svg>
+        </div>
+
+        <div class="chat" style="margin-left: 5vw">
+            <input type="text" style="max-height: 1vh;" />
+            <p style="cursor: pointer; font-weight: 900; font-size-adjust: 0.6">&gt;</p>
+        </div>
+    </section>
+
+    <section id="footer">
+        <p>Kolloquy v0.0.1</p>
+    </section>
+</main>
+</body>
+</html>

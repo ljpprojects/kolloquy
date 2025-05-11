@@ -1,4 +1,4 @@
-use crate::data::{DBQuery, R2Query, R2QueryKind};
+use crate::data::{DBQuery, Query, R2Query, R2QueryKind};
 use base64::alphabet::Alphabet;
 use base64::engine::GeneralPurpose;
 use base64::Engine;
@@ -6,12 +6,10 @@ use brotli::BrotliCompress;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
-use poem::http::Uri;
-use reqwest::Url;
+use std::rc::Rc;
 use svg::Document;
-use crate::chat::Chat;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
 pub struct User {
     pub email: String, // user input
     pub handle: String, // user input
@@ -52,6 +50,7 @@ pub struct AuthenticateBody {
     pub redirect: String,
 }
 
+#[derive(Debug, Clone)]
 pub enum UserQuery {
     GetByEmail(String),
     GetByHandle(String),
@@ -60,6 +59,16 @@ pub enum UserQuery {
     UploadAvatar(User, Document),
     GetAvatar(User),
     UpdateRemote(User),
+}
+
+impl Query for UserQuery {
+    fn has_result(&self) -> bool {
+        match self {
+            UserQuery::GetByEmail(_) | UserQuery::GetByHandle(_) | UserQuery::GetByID(_) => true,
+            UserQuery::GetAvatar(_) => true,
+            _ => false
+        }
+    }
 }
 
 impl DBQuery for UserQuery {
@@ -140,13 +149,6 @@ impl DBQuery for UserQuery {
             _ => panic!("Cannot convert to SQL query string for this query type.")
         }
     }
-    
-    fn has_result(&self) -> bool {
-        match self {
-            Self::GetByEmail(_) | Self::GetByHandle(_) | Self::GetByID(_) => true,
-            _ => false
-        }
-    }
 }
 
 impl R2Query for UserQuery {
@@ -161,7 +163,7 @@ impl R2Query for UserQuery {
 
     fn kind(&self) -> R2QueryKind {
         match self {
-            Self::UploadAvatar(user, svg) => {
+            Self::UploadAvatar(_, svg) => {
                 let mut avatar = Cursor::new(svg.to_string());
                 let mut compressed_avatar = Vec::with_capacity((svg.to_string().len() as f64 / 1.3).ceil() as usize);
                 BrotliCompress(&mut avatar, &mut compressed_avatar, &Default::default()).unwrap();
@@ -172,14 +174,6 @@ impl R2Query for UserQuery {
                 R2QueryKind::GetObject
             }
             _ => panic!("Cannot make R2 query for this query type.")
-        }
-    }
-    
-    fn has_result(&self) -> bool {
-        match self {
-            UserQuery::GetByEmail(_) | UserQuery::GetByHandle(_) | UserQuery::GetByID(_) => true,
-            UserQuery::GetAvatar(_) => true,
-            _ => false
         }
     }
 }

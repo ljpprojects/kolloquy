@@ -105,7 +105,7 @@ pub fn create_chat_icon() -> Document {
 pub struct Message {
     /// This contains the current message in the chat in LIFO order (last sent message is first in the vec)
     pub content: Vec<String>,
-    pub author: User,
+    pub author: String,
     pub sent: DateTime<Utc>,
     pub id: u64,
 }
@@ -187,6 +187,8 @@ impl<'a> Chat {
     }
     
     pub async fn from_remote(id: String) -> Option<Self> {
+        eprintln!("REM URL /{id}.json.br");
+
         let remote_url = format!("/{id}.json.br");
 
         let mut compressed = Cursor::new(KOLLOQUY_CHATS_BUCKET.deref()

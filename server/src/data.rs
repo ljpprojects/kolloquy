@@ -7,6 +7,7 @@ use serde_json::{json, Map, Value};
 use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::LazyLock;
@@ -42,15 +43,17 @@ pub enum R2QueryKind {
     DeleteObject,
 }
 
-pub trait R2Query {
-    fn path(&self) -> String;
-    fn kind(&self) -> R2QueryKind;
+pub trait Query: Send + Sync {
     fn has_result(&self) -> bool;
 }
 
-pub trait DBQuery {
+pub trait R2Query: Query {
+    fn path(&self) -> String;
+    fn kind(&self) -> R2QueryKind;
+}
+
+pub trait DBQuery: Query {
     fn to_sql_query_string(&self) -> (String, Vec<String>);
-    fn has_result(&self) -> bool;
 }
 
 pub struct KolloquyDB<'a>(PhantomData<&'a ()>);

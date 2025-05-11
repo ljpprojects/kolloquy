@@ -2,9 +2,8 @@ use chrono::Utc;
 use poem::Middleware;
 use poem::{Endpoint, Request};
 use std::collections::HashMap;
-use async_std::fs;
-use async_std::io::Write;
-use async_std::path::PathBuf;
+use std::path::PathBuf;
+use tokio::fs;
 
 #[derive(Debug, Clone)]
 pub enum LoggingPersistence {
@@ -55,7 +54,7 @@ impl<E: Endpoint> Endpoint for LoggedEndpoint<E> {
                     req.headers().iter().map(|(k, v)| format!("{k}={v:?}")).collect::<Vec<_>>().join(","),
                 );
                 
-                async_std::task::spawn(async move {
+                tokio::task::spawn(async move {
                     if &*String::from_utf8_lossy(fs::read(file.clone()).await.unwrap().as_slice()) == "" {
                         fs::write(file, &[log.as_bytes().to_owned()].concat()).await.unwrap();
                     } else {

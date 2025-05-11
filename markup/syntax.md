@@ -1,17 +1,23 @@
 # Kolloquy Markup
 
-## Italicise Text
+Note that markdown can be used. To use markdown, type `%MD`
 
-Use the syntax `*TEXT*` to italicise text.
+## Emphasise
 
-## Bold Text
+Use the syntax `<TEXT>` to italicise text.
 
-Use the syntax `!TEXT!` to bold text.
+## Shout (Bold)
+
+Use the syntax `*TEXT*` to bold text.
 
 ## Links
 
-Use the syntax `(TEXT)[LINK]` for links.
+Use the syntax `(DISPLAY)<LINK>` for links.
 
-## Integrations
+## Underline
 
-Use the syntax `[NAME]` for integrations.
+Use the syntax `_TEXT_`
+
+## Strikethrough
+
+Use the syntax `-TEXT-` 
