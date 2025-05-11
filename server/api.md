@@ -24,7 +24,11 @@
   "error": {
     "code": 100,
     "message": "Request timed out",
-  }
+  },
+  
+  /* Only sent if success = true */
+  "id": "XXXXXXX",
+  "avatar": "<svg ...></svg>"
 }
 ```
 

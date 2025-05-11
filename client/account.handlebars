@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Kolloquy Account</title>
+    <link rel="stylesheet" href="/index.css">
+    <link rel="stylesheet" href="/account.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+<main>
+    <section id="header">
+        <h1>Kolloquy</h1>
+    </section>
+
+    <section id="info">
+        {{#with user}}
+            {{{avatar}}}
+            <b style="font-size-adjust: 1">@{{handle}}</b>
+            <p id="{{handle}}">...</p>
+
+            <script>
+                const joined = document.querySelector("#{{handle}}");
+
+                joined.textContent = "Joined " + new Date("{{joined}}").toLocaleString();
+            </script>
+        {{/with}}
+    </section>
+
+    <section id="footer">
+        {{#if not_self}}
+            <!-- nop -->
+        {{else}}
+            <a href="/chats">View chats ></a>
+        {{/if}}
+
+        <p>Kolloquy v0.0.1</p>
+    </section>
+</main>
+<script>
+    const avatar = document.querySelector("svg");
+
+    avatar.setAttribute("width", "200px");
+    avatar.setAttribute("height", "200px");
+</script>
+</body>
+</html>

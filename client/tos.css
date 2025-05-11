@@ -1,0 +1,7 @@
+main {
+    max-width: 75vw;
+    padding: 10vmin;
+    background: none;
+    color: var(--primary-colour);
+    text-align: left;
+}

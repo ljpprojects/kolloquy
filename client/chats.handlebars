@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Kolloquy Chats</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="chats.css">
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
+    <script src="https://w3c.github.io/trusted-types/dist/es5/trustedtypes.api_only.build.js"></script>
+</head>
+<body>
+<main>
+    <section id="header">
+        <a href="/account"><</a> <h1>Kolloquy</h1>
+    </section>
+
+    <b>DEBUG: {{debug.chat_count}}</b>
+
+    <section id="info">
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>New Chat</b>
+                <input placeholder="Chat Name" id="chatname" />
+                <input class="inlineParticipant" type="text" placeholder="Handle" id="participantInput" />
+
+                <div id="inlineParticipants"></div>
+            </div>
+
+            <button id="chatcreate">
+                <b style="font-size: 50px">+</b>
+            </button>
+        </div>
+
+        {{#each chats as | chat |}}
+            <div class="chat" id="{{chat.id}}">
+                {{#with chat}}
+                    <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                        <b>{{{name}}}</b>
+                        {{#each messages as | message |}}
+                            {{#if @last}}
+                                <p>{{message}}</p>
+                            {{/if}}
+                        {{/each}}
+                    </div>
+
+                    {{{icon}}}
+                {{/with}}
+            </div>
+
+            <script>
+                document.getElementById("{{chat.id}}").addEventListener("click", () => {
+                    window.location.href = "/chat/{{chat.id}}"
+                })
+            </script>
+        {{/each}}
+    </section>
+
+    <script src="dist/chats.js"></script>
+
+    <section id="footer">
+        <p>Kolloquy v0.0.1</p>
+    </section>
+</main>
+</body>
+</html>

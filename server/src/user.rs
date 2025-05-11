@@ -1,13 +1,15 @@
-use std::io::Cursor;
+use crate::data::{DBQuery, Query, R2Query, R2QueryKind};
 use base64::alphabet::Alphabet;
-use base64::Engine;
 use base64::engine::GeneralPurpose;
+use base64::Engine;
 use brotli::BrotliCompress;
-use brotli::enc::singlethreading::compress_multi;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::data::DBQuery;
+use std::io::Cursor;
+use std::rc::Rc;
+use svg::Document;
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash, Eq)]
 pub struct User {
     pub email: String, // user input
     pub handle: String, // user input
@@ -30,6 +32,7 @@ pub struct User {
     pub failed_login_attempts: i32, // service input
     pub locked_until: DateTime<Utc>, // service input
     pub timezone: String, // inferrable input
+    pub enrolled_chats: Vec<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,11 +43,32 @@ pub struct RegisterBody {
     pub password: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AuthenticateBody {
+    pub email: String,
+    pub password: String,
+    pub redirect: String,
+}
+
+#[derive(Debug, Clone)]
 pub enum UserQuery {
     GetByEmail(String),
     GetByHandle(String),
     GetByID(String),
-    Register(User)
+    PutToDB(User),
+    UploadAvatar(User, Document),
+    GetAvatar(User),
+    UpdateRemote(User),
+}
+
+impl Query for UserQuery {
+    fn has_result(&self) -> bool {
+        match self {
+            UserQuery::GetByEmail(_) | UserQuery::GetByHandle(_) | UserQuery::GetByID(_) => true,
+            UserQuery::GetAvatar(_) => true,
+            _ => false
+        }
+    }
 }
 
 impl DBQuery for UserQuery {
@@ -53,14 +77,14 @@ impl DBQuery for UserQuery {
             Self::GetByEmail(email) => ("SELECT * FROM users WHERE email = ?".to_string(), vec![email.clone()]),
             Self::GetByHandle(handle) => ("SELECT * FROM users WHERE handle = ?".to_string(), vec![handle.clone()]),
             Self::GetByID(id) => ("SELECT * FROM users WHERE userid = ?".to_string(), vec![id.clone()]),
-            Self::Register(user) => {
+            Self::PutToDB(user) => {
                 let mut read_desc = Cursor::new(user.description.clone());
                 let mut compressed_desc = Vec::with_capacity((user.description.len() as f64 / 1.3).ceil() as usize);
 
                 BrotliCompress(&mut read_desc, &mut compressed_desc, &Default::default()).unwrap();
 
                 (
-                    "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)".to_string(),
+                    "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)".to_string(),
                     vec![
                         user.email.clone(),
                         user.handle.clone(),
@@ -82,9 +106,74 @@ impl DBQuery for UserQuery {
                         user.failed_login_attempts.to_string(),
                         user.locked_until.to_rfc3339(),
                         user.timezone.to_string(),
+                        user.enrolled_chats.join(",")
                     ]
                 )
+            },
+
+            Self::UpdateRemote(user) => {
+                let mut read_desc = Cursor::new(user.description.clone());
+                let mut compressed_desc = Vec::with_capacity((user.description.len() as f64 / 1.3).ceil() as usize);
+
+                BrotliCompress(&mut read_desc, &mut compressed_desc, &Default::default()).unwrap();
+
+                (
+                    "UPDATE users\nSET email = ?, handle = ?, password = ?, age = ?, country = ?, preferences = ?, suspended = ?, age_verified = ?, userid = ?, phone_number = ?, joined = ?, description = ?, last_agent = ?, last_approx_country = ?, avatar_url = ?, email_verified = ?, last_login = ?, failed_login_attempts = ?, locked_until = ?, timezone = ?, enrolled_chats = ?\nWHERE userid = ?;".to_string(),
+                    vec![
+                        user.email.clone(),
+                        user.handle.clone(),
+                        user.password.clone(),
+                        user.age.to_string(),
+                        user.country.clone(),
+                        user.preferences.clone(),
+                        (user.suspended as u8).to_string(),
+                        (user.age_verified as u8).to_string(),
+                        user.user_id.clone(),
+                        user.phone_number.clone(),
+                        user.joined.to_rfc3339(),
+                        GeneralPurpose::new(&Alphabet::new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/").unwrap(), Default::default()).encode(compressed_desc),
+                        user.last_agent.clone(),
+                        user.last_approx_country.clone(),
+                        user.avatar_url.clone(),
+                        (user.email_verified as u8).to_string(),
+                        user.last_login.to_rfc3339(),
+                        user.failed_login_attempts.to_string(),
+                        user.locked_until.to_rfc3339(),
+                        user.timezone.to_string(),
+                        user.enrolled_chats.join(","),
+                        user.user_id.clone()
+                    ]
+                )
+            },
+            
+            _ => panic!("Cannot convert to SQL query string for this query type.")
+        }
+    }
+}
+
+impl R2Query for UserQuery {
+    fn path(&self) -> String {
+        match self {
+            Self::UploadAvatar(user, _) | Self::GetAvatar(user) => {
+                format!("/{}", user.avatar_url)
             }
+            _ => panic!("Cannot make R2 query for this query type.")
+        }
+    }
+
+    fn kind(&self) -> R2QueryKind {
+        match self {
+            Self::UploadAvatar(_, svg) => {
+                let mut avatar = Cursor::new(svg.to_string());
+                let mut compressed_avatar = Vec::with_capacity((svg.to_string().len() as f64 / 1.3).ceil() as usize);
+                BrotliCompress(&mut avatar, &mut compressed_avatar, &Default::default()).unwrap();
+                 
+                R2QueryKind::PutObject(compressed_avatar)
+            }
+            Self::GetAvatar(_) => {
+                R2QueryKind::GetObject
+            }
+            _ => panic!("Cannot make R2 query for this query type.")
         }
     }
 }

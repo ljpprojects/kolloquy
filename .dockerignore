@@ -1,0 +1,13 @@
+.dockerignore
+.gitignore
+.github
+**/.idea
+._*
+**/._*
+**/.git
+server/target
+server/logs
+server/cache
+client/dist
+**/*.sh
+**/*.zip

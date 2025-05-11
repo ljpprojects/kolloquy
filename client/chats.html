@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Kolloquy Chats</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="chats.css">
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
+    <script src="https://w3c.github.io/trusted-types/dist/es5/trustedtypes.api_only.build.js"></script>
+</head>
+<body>
+<main>
+    <section id="header">
+        <a href="/account"><</a> <h1>Kolloquy</h1>
+    </section>
+
+    <section id="info">
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>New Chat</b>
+                <input placeholder="Chat Name" id="chatname" />
+                <input class="inlineParticipant" type="text" placeholder="Handle" id="participantInput" />
+                <div id="inlineParticipants">
+                </div>
+            </div>
+
+            <b style="font-size: 50px" id="chatcreate">+</b>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(303,86%,42%), hsl(278,86%,42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-items: center; text-align: left; vertical-align: central; margin-top: auto; margin-left: 1vmin;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+
+        <div class="chat">
+            <div style="display: grid; justify-content: left; align-content: center; align-items: center; text-align: left; vertical-align: center;">
+                <b>Name</b>
+                <p>Recent Message</p>
+            </div>
+
+            <svg height="100px" style="border-radius: 0.625vmin; background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"></feTurbulence>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"></rect>
+                <rect rx="0.3125vmin" x="25%" y="25%" height="50%" width="50%" fill="#e9eaff"></rect>
+            </svg>
+        </div>
+    </section>
+
+    <script src="dist/chats.js"></script>
+
+    <section id="footer">
+        <p>Kolloquy v0.0.1</p>
+    </section>
+</main>
+</body>
+</html>
