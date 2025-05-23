@@ -17,10 +17,10 @@ pub struct CreateChatBody {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SocketChatBody {
-    pub content: String,
+    pub content: Option<String>,
     pub action: String,
     pub author: SocketChatAuthor,
-    pub chat: String,
+    pub chat: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
