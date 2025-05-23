@@ -26,7 +26,6 @@ aws-creds = "0.38.0"
 handlebars = "6.3.2"
 futures = "0.3.31"
 tracing-subscriber = "0.3.19"
-lettre = { version = "0.11.16", features = ["smtp-transport", "tokio1-rustls-tls", "hostname", "builder"] }
 
 [profile.release]
 debug = "none"
