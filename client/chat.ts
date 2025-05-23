@@ -6,10 +6,10 @@ interface KolloquyAuthor {
 }
 
 interface KolloquyMessageData {
-    action: "PUT" | "EDIT" | "DELETE"
-    content: string,
+    action: "PUT" | "RENEW"
+    content?: string,
     author: KolloquyAuthor,
-    chat: string,
+    chat?: string,
 }
 
 const chatID = (document.getElementById("chatid")!! as HTMLDataElement).value;
@@ -21,7 +21,30 @@ const messages = document.getElementById("info")!! as HTMLDivElement;
 const sendButton = document.getElementById("send")!! as HTMLButtonElement;
 const messageInput = document.getElementById("messageInput")!! as HTMLInputElement;
 
-sendButton.addEventListener("click", () => {
+let sendNotifications = false;
+
+window.onclick = async _ => {
+    if (Notification && typeof Notification === "function") {
+        sendNotifications = (await Notification.requestPermission()) === "granted"
+    }
+
+    window.onclick = _ => true
+}
+
+{
+    (function try_send_renew() {
+        try {
+            socket.send(JSON.stringify({
+                action: "RENEW",
+                author,
+            } satisfies KolloquyMessageData))
+        } catch {
+            setTimeout(try_send_renew, 1000)
+        }
+    })()
+}
+
+messageInput.onchange = _ => {
     const data = {
         content: messageInput.value,
         action: "PUT",
@@ -32,7 +55,9 @@ sendButton.addEventListener("click", () => {
     socket.send(JSON.stringify(data))
 
     messageInput.value = ""
-})
+}
+
+sendButton.addEventListener("click", messageInput.onchange)
 
 socket.addEventListener("message", (e) => {
     const data = JSON.parse(e.data) as KolloquyMessageData
@@ -44,7 +69,31 @@ socket.addEventListener("message", (e) => {
     }
 
     switch (data.action) {
+        case "RENEW":
+            setInterval(() => {
+                socket.send(JSON.stringify({
+                    action: "RENEW",
+                    author,
+                } satisfies KolloquyMessageData))
+            }, 1000)
+
+            break
         case "PUT":
+            setTimeout(async () => {
+                if (Notification && typeof Notification === "function" && !document.hasFocus()) {
+                    const n = new Notification(`@${data.author.handle}`, {
+                        data: data.content,
+                        icon: "icons/icon.svg"
+                    })
+
+                    document.onfocus = _ => {
+                        n.close()
+
+                        document.onfocus = _ => true
+                    }
+                }
+            }, 0)
+
             const div = document.createElement("div")
 
             div.classList.add("chat")

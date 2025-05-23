@@ -1,7 +1,10 @@
 **/*.zip
 .env
 client/test.html
+client/dist/**/*
 server/target
 server/logs
 **/.idea
 **/._*
+**/*.min.js
+**/*.js

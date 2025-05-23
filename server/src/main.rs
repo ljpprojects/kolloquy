@@ -2,6 +2,7 @@ pub(crate) mod user;
 pub(crate) mod data;
 mod logging;
 mod chat;
+mod email;
 
 use crate::chat::{Chat, ChatQuery, CreateChatBody, SocketChatAuthor, SocketChatBody};
 use crate::data::{KolloquyDB, KolloquyR2, QueryError, USER_AVATAR_BUCKET};
@@ -118,10 +119,12 @@ define_static_files! {
     login_css ("text/css") => "../../client/login.css",
     chats_css ("text/css") => "../../client/chats.css",
     chat_css ("text/css") => "../../client/chat.css",
-    login_js ("application/javascript") => "../../client/dist/login.js",
-    register_js ("application/javascript") => "../../client/dist/register.js",
-    chats_js ("application/javascript") => "../../client/dist/chats.js",
-    chat_js ("application/javascript") => "../../client/dist/chat.js",
+    login_js ("application/javascript") => "../../client/dist/login.min.js",
+    register_js ("application/javascript") => "../../client/dist/register.min.js",
+    chats_js ("application/javascript") => "../../client/dist/chats.min.js",
+    chat_js ("application/javascript") => "../../client/dist/chat.min.js",
+    manifest_json ("application/manifest+json") => "../../client/manifest.json",
+    icon_svg ("image/svg+xml") => "../../client/icons/icon.svg",
 }
 
 #[handler]
@@ -389,10 +392,16 @@ async fn chat_socket(
 
                     let response = match &*body.action {
                         "PUT" => SocketChatBody {
-                            content: body.content.clone(),
+                            content: Some(body.content.clone().unwrap()),
                             action: "PUT".into(),
                             author: filled_author,
-                            chat: body.chat.clone(),
+                            chat: Some(body.chat.clone().unwrap()),
+                        },
+                        "RENEW" => SocketChatBody {
+                            content: None,
+                            action: "RENEW".into(),
+                            author: filled_author,
+                            chat: None,
                         },
                         _ => unreachable!(),
                     };
@@ -401,20 +410,22 @@ async fn chat_socket(
                         break;
                     }
 
-                    tokio::spawn(async move {
-                        let mut chat = Chat::from_remote(body.chat).await.unwrap();
+                    if &*body.action == "PUT" {
+                        tokio::spawn(async move {
+                            let mut chat = Chat::from_remote(body.chat.unwrap()).await.unwrap();
 
-                        chat.messages.push(chat::Message {
-                            content: vec![body.content],
-                            author: body.author.id,
-                            sent: Utc::now(),
-                            id: chat.messages.len() as u64,
+                            chat.messages.push(chat::Message {
+                                content: vec![body.content.unwrap()],
+                                author: body.author.id,
+                                sent: Utc::now(),
+                                id: chat.messages.len() as u64,
+                            });
+
+                            let mut query = ChatQuery::PutChat;
+
+                            chat.execute(&mut query).await;
                         });
-
-                        let mut query = ChatQuery::PutChat;
-
-                        chat.execute(&mut query).await;
-                    });
+                    }
                 }
             }
         });
@@ -1001,6 +1012,9 @@ Got JSON:
 
     cookie.set_same_site(SameSite::Strict);
     cookie.set_http_only(true);
+    cookie.set_secure(true);
+    cookie.set_domain("kolloquy.com");
+    cookie.set_path("/");
     cookie.set_max_age(Duration::from_secs(30 * 60));
 
     jar.add(cookie);
@@ -1046,6 +1060,8 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/chats.css", get(chats_css))
         .at("/chat.css", get(chat_css))
         .at("/chats", get(user_chats))
+        .at("/icons/icon.svg", get(icon_svg))
+        .at("/manifest.json", get(manifest_json))
         .at("/chat/:id", get(user_chat));
 
     tracing_subscriber::fmt::init();
