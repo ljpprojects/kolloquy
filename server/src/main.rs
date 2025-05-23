@@ -2,7 +2,6 @@ pub(crate) mod user;
 pub(crate) mod data;
 mod logging;
 mod chat;
-mod email;
 
 use crate::chat::{Chat, ChatQuery, CreateChatBody, SocketChatAuthor, SocketChatBody};
 use crate::data::{KolloquyDB, KolloquyR2, QueryError, USER_AVATAR_BUCKET};

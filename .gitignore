@@ -2,6 +2,7 @@
 .env
 client/test.html
 client/dist/**/*
+client/dist
 server/target
 server/logs
 **/.idea
