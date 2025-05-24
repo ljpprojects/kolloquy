@@ -4,12 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [profile.dev]
-debug = "full"
 opt-level = "z"
-overflow-checks = true
-incremental = true
-debug-assertions = true
-lto = "off"
 
 [dependencies]
 poem = { version = "3.1.10", features = ["cookie", "websocket"] }
@@ -39,27 +34,3 @@ overflow-checks = false
 incremental = true
 debug-assertions = false
 lto = "fat"
-
-[profile.release.package."*"]
-debug = "none"
-opt-level = "z"
-overflow-checks = false
-incremental = true
-debug-assertions = false
-
-[profile.release.build-override]
-debug = "none"
-opt-level = "z"
-overflow-checks = false
-incremental = true
-debug-assertions = false
-
-[profile.dev.build-override]
-debug = "full"
-opt-level = "z"
-overflow-checks = true
-incremental = true
-debug-assertions = true
-
-[profile.test]
-incremental = true
