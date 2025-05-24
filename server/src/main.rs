@@ -36,11 +36,12 @@ use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 use tokio::sync::{broadcast, RwLock};
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::{Receiver, Sender};
 
 #[derive(Default, Clone)]
 pub struct ServerState {
     open_sessions: Arc<RwLock<HashMap<String, (User, DateTime<Utc>)>>>,
+    chat_sessions: Arc<RwLock<HashMap<String, (Sender<SocketChatBody>, Receiver<SocketChatBody>)>>>
 }
 
 macro_rules! define_static_files {
@@ -189,14 +190,20 @@ async fn random_session_id() -> String {
     } else {
         let mut std_rng = rand::rngs::StdRng::from_os_rng();
         let mut chacha_rng = rand_chacha::ChaCha20Rng::seed_from_u64(std_rng.next_u64());
-        let mut bytes = vec![];
-        const BYTE_COUNT: u8 = 64;
+        
+        
+        const BYTE_COUNT: u8 = 22;
 
-        for _ in 0..(BYTE_COUNT / 8) {
-            bytes.extend_from_slice(&(chacha_rng.next_u64() ^ chacha_rng.next_u64() & chacha_rng.next_u64()).to_be_bytes());
+        let mut bytes: [u8; BYTE_COUNT as usize] = [0; BYTE_COUNT as usize];
+        let mut actual_len: usize = 0;
+        
+        while actual_len < BYTE_COUNT as usize {
+            actual_len += 1;
+            
+            bytes[actual_len - 1] = chacha_rng.next_u32() as u8;
         }
 
-        GeneralPurpose::new(&Alphabet::new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/").unwrap(), Default::default()).encode(bytes).to_owned()[0..BYTE_COUNT as usize].to_owned()
+        GeneralPurpose::new(&Alphabet::new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+.").unwrap(), Default::default()).encode(bytes).to_owned()[0..BYTE_COUNT as usize].to_owned()
     }
 }
 
@@ -390,11 +397,30 @@ async fn chat_socket(
                     };
 
                     let response = match &*body.action {
-                        "PUT" => SocketChatBody {
-                            content: Some(body.content.clone().unwrap()),
-                            action: "PUT".into(),
-                            author: filled_author,
-                            chat: Some(body.chat.clone().unwrap()),
+                        "PUT" => {
+                            let response = SocketChatBody {
+                                content: Some(body.content.clone().unwrap()),
+                                action: "PUT".into(),
+                                author: filled_author,
+                                chat: Some(body.chat.clone().unwrap()),
+                            };
+
+                            tokio::spawn(async move {
+                                let mut chat = Chat::from_remote(body.chat.unwrap()).await.unwrap();
+
+                                chat.messages.push(chat::Message {
+                                    content: vec![body.content.unwrap()],
+                                    author: body.author.id,
+                                    sent: Utc::now(),
+                                    id: chat.messages.len() as u64,
+                                });
+
+                                let mut query = ChatQuery::PutChat;
+
+                                chat.execute(&mut query).await;
+                            });
+                            
+                            response
                         },
                         "RENEW" => SocketChatBody {
                             content: None,
@@ -407,23 +433,6 @@ async fn chat_socket(
 
                     if sender.send(response).is_err() {
                         break;
-                    }
-
-                    if &*body.action == "PUT" {
-                        tokio::spawn(async move {
-                            let mut chat = Chat::from_remote(body.chat.unwrap()).await.unwrap();
-
-                            chat.messages.push(chat::Message {
-                                content: vec![body.content.unwrap()],
-                                author: body.author.id,
-                                sent: Utc::now(),
-                                id: chat.messages.len() as u64,
-                            });
-
-                            let mut query = ChatQuery::PutChat;
-
-                            chat.execute(&mut query).await;
-                        });
                     }
                 }
             }
@@ -809,11 +818,13 @@ Got JSON:
 
     state.open_sessions.write().await.insert(sid.clone(), (user.clone(), Utc::now()));
 
-    let mut cookie = cookie::Cookie::new("SSID", sid.clone());
+    let mut cookie = cookie::Cookie::new("__Host-SSID", sid.clone());
 
     cookie.set_same_site(SameSite::Strict);
     cookie.set_http_only(true);
-    cookie.set_max_age(Duration::from_secs(30 * 60));
+    cookie.set_secure(true);
+    cookie.set_path("/");
+    cookie.set_max_age(Duration::from_secs(1800));
 
     jar.add(cookie);
 
