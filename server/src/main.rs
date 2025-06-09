@@ -28,6 +28,7 @@ use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::env;
 use std::io::Cursor;
 use std::ops::{Deref, DerefMut};
@@ -35,6 +36,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+use http_body_util::Full;
+use hyper::{body, http, Request, Response};
+use hyper::body::Bytes;
+use hyper::service::service_fn;
 use tokio::sync::{broadcast, RwLock};
 use tokio::sync::broadcast::{Receiver, Sender};
 
@@ -1044,10 +1049,26 @@ fn apply_cors(app: Route) -> CorsEndpoint<Route> {
     app.with(Cors::new().allow_origins(allowed_origins))
 }
 
-#[handler]
-async fn index() -> Response {
-    Redirect::temporary("/account")
-        .into_response()
+#[derive(Debug, Clone)]
+struct CorsMiddleware<S> {
+    inner: S
+}
+
+impl<S> CorsMiddleware<S> {
+    fn new(inner: s) -> Self {
+        Self { inner }
+    }
+}
+
+impl<S: Service<Request<Incoming>> + Clone> Service<Request<Incoming>> for CorsMiddleware<S> {
+
+}
+
+async fn index(_: Request<body::Incoming>) -> Result<Response<Full<body::Bytes>>, http::Error> {
+    Ok(Response::builder()
+        .status(302)
+        .header("Location", "/account")
+        .body(Full::new(Bytes::new()))?)
 }
 
 #[tokio::main]
