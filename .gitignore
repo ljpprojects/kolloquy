@@ -9,3 +9,5 @@ server/logs
 **/._*
 **/*.min.js
 **/*.js
+ssl/*
+ssl
