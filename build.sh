@@ -27,4 +27,4 @@ cd ../..
 
 echo "----- Packaging -----"
 
-tar -cav --exclude '**/._*' --exclude './.idea' --exclude './.git' --exclude 'server/target' --file=build.tar .
+tar -cav --exclude server/target --file=build.tar server/**/* ssl/* ringtones/* client/*.html client/*.handlebars client/*.css client/*.gif client/dist/*.min.js client/icons/* .env

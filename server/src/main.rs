@@ -1,3 +1,4 @@
+use poem::listener::Listener;
 pub(crate) mod user;
 pub(crate) mod data;
 mod logging;
@@ -21,8 +22,8 @@ use poem::middleware::{AddData, CookieJarManager, Cors, CorsEndpoint};
 use poem::web::cookie::{CookieJar, SameSite};
 use poem::web::websocket::{Message, WebSocket};
 use poem::web::{cookie, Data, Redirect};
-use poem::{get, handler, listener::TcpListener, web::Path, Body, EndpointExt, FromRequest, IntoResponse, Route, Server};
 use poem::Response;
+use poem::{get, handler, listener::TcpListener, web::Path, Body, EndpointExt, FromRequest, IntoResponse, Route, Server};
 use rand::{Rng, RngCore, SeedableRng};
 use regex::Regex;
 use serde::Serialize;
@@ -35,8 +36,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use tokio::sync::{broadcast, RwLock};
+use poem::listener::{AcceptorExt, RustlsCertificate, RustlsConfig};
 use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::{broadcast, RwLock};
 
 #[derive(Default, Clone)]
 pub struct ServerState {
@@ -138,6 +140,9 @@ const USE_NET_RAND: bool = false;
 const ACCOUNT_TEMPLATE: &str = include_str!("../../client/account.handlebars");
 const CHATS_TEMPLATE: &str = include_str!("../../client/chats.handlebars");
 const CHAT_TEMPLATE: &str = include_str!("../../client/chat.handlebars");
+
+const SSL_CERT: &str = include_str!("../../ssl/origin.crt");
+const SSL_PRIV_KEY: &str = include_str!("../../ssl/origin.key");
 
 static UID_REGEX: LazyLock<Regex, fn() -> Regex> = LazyLock::new(|| Regex::from_str(r"[a-z]{2}+\d{2}+[a-z]{3}+").unwrap());
 static UID_FILTERING_REGEX: LazyLock<Regex, fn() -> Regex> = LazyLock::new(|| Regex::from_str(r"([a-z])[^a-z]*([a-z])[^a-z]*(\d)[^\d]*(\d)[^\d]*([a-z])[^a-z]*([a-z])[^a-z]*([a-z])[^a-z]*").unwrap());
@@ -1097,7 +1102,9 @@ async fn main() -> Result<(), std::io::Error> {
 
     eprintln!("Server running at {addr}");
 
-    Server::new(TcpListener::bind(addr))
+    let listener = TcpListener::bind(addr).rustls(RustlsConfig::new().fallback(RustlsCertificate::new().key(SSL_PRIV_KEY).cert(SSL_CERT)));
+
+    Server::new(listener)
         .run(app)
         .await
 }

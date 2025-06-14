@@ -1,127 +1,124 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
 :root {
-    --bg-colour: #e9eaff;
-    --err-colour: #e08d8d;
-    --primary-colour: #2b2b35;
-    --text-colour: #e9eaff;
-    text-align: center;
-    font-family: Poppins, sans-serif;
-}
+    --neu-inc-dec: calc(1 + 6 / 27);
 
-input {
-    font-family: Poppins, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-colour: #2b2b35;
-        --err-colour: #803d3d;
-        --primary-colour: #e9eaff;
-        --text-colour: #2b2b35;
-    }
-}
-
-:root {
-    color: var(--text-colour);
-    transition-duration: 0.15s;
-    transition-timing-function: cubic-bezier(0.26, 0.91, 0.76, 1);
-}
-
-a {
-    text-decoration: none;
-    color: var(--bg-colour);
+    --bd-rad: 0.6125vmax;
+    --padding: 1.5vmin;
 
     @media only screen and (max-width: 1000px) {
-        color: var(--primary-colour);
+        --padding: 1.5vmax;
+        --bd-rad: 0.8vmax;
     }
+
+    --prim-col: #253971;
+    --prim-col-r: 37;
+    --prim-col-g: 57;
+    --prim-col-b: 113;
+
+    --sec-col : #a3ebe2;
+    --acc-col : #f1f1f1;
+
+    @media (prefers-color-scheme: light) {
+        --prim-col: #8fa3db;
+        --prim-col-r: 143;
+        --prim-col-g: 163;
+        --prim-col-b: 219;
+
+        --sec-col : #145b53;
+        --acc-col : #1b1b1b;
+    }
+
+    color: var(--acc-col);
+    font-family: "Poppins", -apple-system, sans-serif;
+    border: none;
+    text-decoration: none;
 }
 
-@media only screen and (max-width: 1000px) {
-    :root {
-        color: var(--primary-colour);
+nav {
+    width: 50vmax;
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    gap: 5vw;
+    height: 5vmax;
+    padding: var(--padding);
+    border-radius: calc(var(--bd-rad) * 4.5);
+    background-color: var(--prim-col);
+    box-shadow: 0.625vmax 0.625vmax 1vmax rgb(calc(var(--prim-col-r) / var(--neu-inc-dec)), calc(var(--prim-col-g) / var(--neu-inc-dec)), calc(var(--prim-col-b) / var(--neu-inc-dec))),
+                -0.625vmax -0.625vmax 1vmax rgb(calc(var(--prim-col-r) * var(--neu-inc-dec)), calc(var(--prim-col-g) * var(--neu-inc-dec)), calc(var(--prim-col-b) * var(--neu-inc-dec)));
+
+    @media only screen and (max-width: 1000px) {
+        height: 8vmax;
     }
 
-    body {
-        min-width: 35vw;
-        height: 75vh;
-        background-color: var(--primary-colour);
-        border-radius: 5vmin;
-        border: none;
-        display: grid;
-        margin: 0;
-        padding: 0;
+    & > section#nav-account {
+        display: flex;
         justify-content: center;
         align-items: center;
-        overflow-y: auto;
-        overflow-x: visible;
-        grid-template-areas:
-            "h"
-            "l"
-            "l"
-            "f";
-    }
-}
+        gap: 1.5vw;
+        background-color: var(--prim-col);
+        box-shadow: 0.625vmax 0.625vmax 1vmax rgb(calc(var(--prim-col-r) / var(--neu-inc-dec)), calc(var(--prim-col-g) / var(--neu-inc-dec)), calc(var(--prim-col-b) / var(--neu-inc-dec))),
+                    -0.625vmax -0.625vmax 1vmax rgb(calc(var(--prim-col-r) * var(--neu-inc-dec)), calc(var(--prim-col-g) * var(--neu-inc-dec)), calc(var(--prim-col-b) * var(--neu-inc-dec)));
 
-main {
-    min-width: 40vw;
-    height: 75vh;
-    background-color: var(--primary-colour);
-    border-radius: 5vmin;
-    border: none;
-    display: grid;
-    margin: 0;
-    padding: 0;
-    justify-content: center;
-    align-items: center;
-    overflow-y: auto;
-    overflow-x: visible;
-    grid-template-areas:
-        "h"
-        "l"
-        "l"
-        "f";
+        padding: var(--padding);
+        border-radius: calc(var(--bd-rad) * 3);
 
-    @media only screen and (max-width: 1000px) {
-        width: 100vw;
-        height: 100vh;
-        background-color: var(--bg-colour);
-    }
-}
+        transition-duration: 0.25s;
+        transition-timing-function: cubic-bezier(0.14, 0.76, 0.73, 0.69);
 
-#header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    align-content: center;
-    grid-area: h;
-    overflow-y: auto;
-    overflow-x: visible;
+        &:hover:not(:active) {
+            transform: scale(110%);
+        }
 
-    a {
-        font-size-adjust: 1.5;
-        font-weight: 900;
+        &:active {
+            box-shadow: inset 0.625vmax 0.625vmax 1vmax rgb(calc(var(--prim-col-r) / var(--neu-inc-dec)), calc(var(--prim-col-g) / var(--neu-inc-dec)), calc(var(--prim-col-b) / var(--neu-inc-dec))),
+                        inset -0.625vmax -0.625vmax 1vmax rgb(calc(var(--prim-col-r) * var(--neu-inc-dec)), calc(var(--prim-col-g) * var(--neu-inc-dec)), calc(var(--prim-col-b) * var(--neu-inc-dec)));
+
+            & > svg {
+                box-shadow: inset -.5em -.5em 1em 0 #ffffff9f;
+            }
+        }
+
+        height: 3vmax;
+
+        @media only screen and (max-width: 1000px) {
+            height: 6vmax;
+        }
+
+        & > svg {
+            border: none;
+            border-radius: calc(var(--bd-rad) * 1.5);
+            width: 3vmax;
+            height: 3vmax;
+            aspect-ratio: 1/1;
+            box-shadow: inset .5em .5em .5em 0 #ffffff9f;
+
+            @media only screen and (max-width: 1000px) {
+                width: 6vmax;
+                height: 6vmax;
+            }
+        }
     }
 
-    h1 {
-        font-size-adjust: 1.3;
+    & > b {
+        background-image: linear-gradient(var(--sec-col) 0 0);
+        background-position: 0 100%;
+        background-size: 0 .1em;
+        background-repeat: no-repeat;
+        transition-duration: 0.25s;
+        transition-timing-function: cubic-bezier(0.26, 0.91, 0.76, 1);
     }
-}
 
-.hidden {
-    display: none;
-    opacity: 0;
+    & > b:hover {
+        background-size: 100% .1em;
+    }
 }
 
 body {
-    width: 100vw;
-    height: 100vh;
-    background-color:  var(--bg-colour);
+    max-width: 100vw;
+    max-height: 100vh;
+    background-color: var(--prim-col);
     display: grid;
-    margin: 0;
-    padding: 0;
-    justify-content: center;
-    align-items: center;
-    overflow-y: auto;
-    overflow-x: visible;
+    grid-template-rows: 1fr 4fr;
 }
