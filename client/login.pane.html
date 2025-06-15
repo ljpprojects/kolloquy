@@ -1,0 +1,72 @@
+<style>
+    #pane {
+        display: grid;
+        justify-content: center;
+        align-content: center;
+        justify-items: center;
+        gap: 2.5vh;
+
+        & > input {
+            width: 20vw;
+        }
+
+        & > p.errmsg {
+            max-width: 50vw;
+            text-align: center;
+        }
+
+        & > div > #account-create {
+            margin-bottom: 5vh;
+            width: 15vw;
+        }
+
+        & > input#login {
+            width: 25vw;
+        }
+
+        & input.extrude {
+            box-shadow: 0.625vmax 0.625vmax 1vmax rgb(calc(var(--prim-col-r) / var(--neu-inc-dec)), calc(var(--prim-col-g) / var(--neu-inc-dec)), calc(var(--prim-col-b) / var(--neu-inc-dec))),
+            -0.625vmax -0.625vmax 1vmax rgb(calc(var(--prim-col-r) * var(--neu-inc-dec)), calc(var(--prim-col-g) * var(--neu-inc-dec)), calc(var(--prim-col-b) * var(--neu-inc-dec)));
+
+            transition-duration: 0.25s;
+            transition-timing-function: cubic-bezier(0.14, 0.76, 0.73, 0.69);
+
+            &:hover:not(:active) {
+                transform: scale(110%);
+            }
+
+            &:active {
+                box-shadow: inset 0.625vmax 0.625vmax 1vmax rgb(calc(var(--prim-col-r) / var(--neu-inc-dec)), calc(var(--prim-col-g) / var(--neu-inc-dec)), calc(var(--prim-col-b) / var(--neu-inc-dec))),
+                inset -0.625vmax -0.625vmax 1vmax rgb(calc(var(--prim-col-r) * var(--neu-inc-dec)), calc(var(--prim-col-g) * var(--neu-inc-dec)), calc(var(--prim-col-b) * var(--neu-inc-dec)));
+
+                & > svg {
+                    box-shadow: inset -.5em -.5em 1em 0 #ffffff9f;
+                }
+            }
+        }
+    }
+</style>
+
+<input id="email" type="email" placeholder="Email" aria-placeholder="Email">
+<p class="errmsg hidden" id="emailerr">Handles must be 3-15 characters in length and contain only alphanumeric characters, _, !, $, -, ., \ and /.</p>
+
+<input id="password" type="password" placeholder="Password" aria-placeholder="Password">
+<p class="errmsg hidden" id="passerr">Passwords must be 8 characters or longer and contain at least one letter, number, and special character or punctuation.</p>
+
+<p style="font-size-adjust: 0.45;">OR</p>
+
+<div>
+    <input type="button" class="extrude" data-trigger="click" data-action="switch-to:loading,signup" id="account-create" value="Create an account">
+</div>
+
+<!--
+<p style="font-size-adjust: 0.4;">OR</p>
+
+<div>
+    <input type="button" class="extrude" data-action="login-passkey" id="login-passkey" value="Login with Passkey">
+</div>
+-->
+
+<input class="extrude" data-action="login" type="button" id="login" value="Login >">
+
+<script defer src="dist/login.js"></script>

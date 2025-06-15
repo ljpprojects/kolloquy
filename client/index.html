@@ -1,39 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Kolloquy</title>
-  <link rel="stylesheet" href="index.css">
-  <link rel="manifest" href="manifest.json" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Kolloquy</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="manifest" href="manifest.json" />
 </head>
 <body>
 <section style="display: flex; justify-content: center; align-items: center">
-  <nav id="nav">
-    <section id="nav-account">
-      <svg height="100px" style="background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
-        <filter id="noise">
-          <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"/>
-        </filter>
-        <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"/>
-        <circle cx="50%" cy="50%" fill="#e9eaff" r="31%"/>
-      </svg>
+    <nav id="nav">
+        <section id="nav-account">
+            <svg height="100px" style="background: linear-gradient(135deg, hsl(134deg, 86%, 42%), hsl(184deg, 86%, 42%))" width="100px" xmlns="http://www.w3.org/2000/svg">
+                <filter id="noise">
+                    <feTurbulence baseFrequency="5" numOctaves="3" stitchTiles="noStitch" type="fractalNoise"/>
+                </filter>
+                <rect filter="url(#noise)" height="100%" opacity="90%" width="100%"/>
+                <circle cx="50%" cy="50%" fill="#e9eaff" r="31%"/>
+            </svg>
+        </section>
+
+        <b>Chats</b>
+        <b>About</b>
+    </nav>
+</section>
+
+<main>
+    <section id="pane">
+
     </section>
+</main>
 
-    <b>Chats</b>
-    <b>About</b>
-  </nav>
-</section>
-
-<section>
-  <section id="header">
-    <h1>Kolloquy</h1>
-  </section>
-
-  <main>
-    <b>A</b>
-  </main>
-</section>
+<script defer src="dist/index.js"></script>
 </body>
 </html>

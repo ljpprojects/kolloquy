@@ -1,0 +1,43 @@
+<script data-setup>
+    let gatheredContent = ""
+    const start = Date.now();
+
+    window.paneContext.registerAction("async-switch", (el, args) => {
+        window.paneContext.switchTo(window.paneContext.fillTemplate(gatheredContent, args))
+    })
+
+    window.paneContext.getPane('[$0]').then(p => {
+        gatheredContent = p
+
+        window.paneContext.fireTrigger(triggers["async:load-done"], _ => true)
+    })
+</script>
+
+<style>
+    .circ {
+        aspect-ratio: 1/1;
+        width: 30vmin;
+        height: 30vmin;
+        border: none;
+        border-radius: 50%;
+        background-image: conic-gradient(var(--prim-col), var(--sec-col));
+        animation-duration: 1.5s;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-name: rotate;
+    }
+
+    @keyframes rotate {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+
+<div class="circ"></div>
+
+<object data-trigger="async:load-done" data-action="async-switch"></object>
