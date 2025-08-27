@@ -1,6 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 300 300">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
     <defs>
+        <style>
+            @import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+        </style>
         <linearGradient id="fg1" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="hsl(220.5, 100%, 45%)" />
             <stop offset="100%" stop-color="hsl(240.5, 100%, 45%)" />
@@ -12,6 +14,14 @@
         <linearGradient id="fg3" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="hsl(190.5, 100%, 50%)" />
             <stop offset="100%" stop-color="hsl(110.5, 100%, 50%)" />
+        </linearGradient>
+        <linearGradient id="fg4" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="hsl(220.5, 100%, 45%)" />
+            <stop offset="100%" stop-color="hsl(240.5, 100%, 45%)" />
+        </linearGradient>
+        <linearGradient id="fg5" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="hsl(40.5, 100%, 45%)" />
+            <stop offset="100%" stop-color="hsl(120.5, 100%, 45%)" />
         </linearGradient>
         <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="hsl(171.5, 100%, 45%)" />
@@ -43,13 +53,6 @@
     <rect width="300" height="300" fill="url(#bg)" />
     <circle cx="150" cy="0" r="93.75" fill="url(#fg1)" />
     <circle cx="150" cy="300" r="93.75" fill="url(#fg1)" />
-    <rect
-        width="300"
-        height="300"
-        filter="url(#noise)"
-        opacity="0.9"
-        mask="url(#outsideMask)"
-    />
     <circle
         cx="150"
         cy="150"
@@ -105,8 +108,8 @@
         cx="150"
         cy="150"
         r="93.75"
-        fill="url(#fg2)"
-        style="mix-blend-mode: color;"
+        fill="url(#fg1)"
+        style="mix-blend-mode: hue;"
     >
         <animateMotion
             begin="0s"
@@ -122,25 +125,8 @@
         cx="150"
         cy="150"
         r="93.75"
-        fill="url(#fg3)"
-        style="mix-blend-mode: difference;"
-    >
-        <animateMotion
-            begin="0s"
-            dur="5s"
-            path="M 0,0 L 0,37.5 M 0,37.5 L 0,-37.5 M 0,-37.5 L 0,0"
-            calcMode="spline"
-            keySplines="0.65 0.35 0.75 1"
-            keyTimes="0;1"
-            repeatCount="indefinite"
-        />
-    </circle>
-    <circle
-        cx="150"
-        cy="150"
-        r="93.75"
         fill="url(#fg1)"
-        style="mix-blend-mode: hue;"
+        style="mix-blend-mode: color;"
     >
         <animateMotion
             begin="0s"
@@ -152,4 +138,51 @@
             repeatCount="indefinite"
         />
     </circle>
+    <rect
+        width="7.5"
+        height="300"
+        x="274"
+        fill="url(#fg1)"
+    />
+    <g>
+        <circle
+            cx="150"
+            cy="150"
+            r="93.75"
+            fill="url(#fg1)"
+            style="mix-blend-mode: hue;"
+        />
+
+        <text
+            x="150"
+            y="150"
+            fill="#fafafaaa"
+            style="font-family: 'Poppins'"
+        >
+            2
+        </text>
+
+        <animateMotion
+            begin="0s"
+            dur="5s"
+            path="M 0,0 L 0,37.5 M 0,37.5 L 0,-37.5 M 0,-37.5 L 0,0"
+            calcMode="spline"
+            keySplines="0.65 0.35 0.75 1"
+            keyTimes="0;1"
+            repeatCount="indefinite"
+        />
+    </g>
+    <rect
+        width="7.5"
+        height="300"
+        x="287.75"
+        fill="url(#fg5)"
+    />
+    <rect
+        width="300"
+        height="300"
+        filter="url(#noise)"
+        opacity="0.9"
+        mask="url(#outsideMask)"
+    />
 </svg>

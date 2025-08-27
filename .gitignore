@@ -26,5 +26,8 @@ vite.config.ts.timestamp-*
 !.dev.vars.example
 .env*
 
+# Bun
+bun.lock
+
 # macOS
 ._*
