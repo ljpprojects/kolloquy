@@ -1,0 +1,36 @@
+:root {
+    padding: 0;
+}
+
+form {
+    display: grid;
+    row-gap: 1vh;
+}
+
+.input-field {
+    height: 3vh;
+    width: 20vw;
+    border: 2px solid #000;
+    border-radius: .5vmin;
+    padding: .5vmin;
+}
+
+#submit {
+    box-sizing: content-box;
+    height: 3vh;
+    width: 20vw;
+    border: 2px solid #000;
+    border-radius: .5vmin;
+    padding: .5vmin;
+    background-color: #ee4352;
+    transition-duration: 0.15s;
+    transition-timing-function: cubic-bezier(0.26, 0.91, 0.76, 1);
+}
+
+#error-msg {
+    color: #ee4352;
+}
+
+#submit:hover {
+    transform: scale(1.03);
+}

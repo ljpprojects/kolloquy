@@ -1,0 +1,23 @@
+#digits {
+    display: flex;
+    gap: 1vw;
+}
+
+.input-digit::-webkit-outer-spin-button,
+.input-digit::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.input-digit {
+    text-align: center;
+    font-size: 2em;
+    font-weight: bold;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    height: 9vh;
+    width: 6vh;
+    border: 2px solid #000;
+    border-radius: .5vmin;
+    padding: .5vmin;
+}

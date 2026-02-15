@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Kolloquy</title>
+</head>
+<body>
+    <h1>Hello, {{display_name}}</h1>
+
+    <b>Chats</b>
+    <ul>
+        {{#each chats}}
+            <li>
+                {{this.name}}
+            </li>
+        {{/each}}
+    <ul>
+</body>
+</html>
