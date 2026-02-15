@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Kolloquy (Verify)</title>
+	<link rel="stylesheet" href="/css/index.css">
+	<link rel="stylesheet" href="/css/verify.css">
+</head>
+<body>
+    <b id="error-msg" style="display: none">
+        error:
+    </b>
+
+    <br />
+
+    <p>Enter the code you received in your email.</p>
+    <button id="resend" class="input-field">Send again (once per two minutes)</button>
+
+    <br />
+    <br />
+
+    <form id="register-form">
+        <div id="digits">
+            <input type="number" id="dig1" class="input-digit" value="" min="0" max="9" required />
+            <input type="number" id="dig2" class="input-digit" value="" min="0" max="9" required />
+            <input type="number" id="dig3" class="input-digit" value="" min="0" max="9" required />
+            <input type="number" id="dig4" class="input-digit" value="" min="0" max="9" required />
+            <input type="number" id="dig5" class="input-digit" value="" min="0" max="9" required />
+            <input type="number" id="dig6" class="input-digit" value="" min="0" max="9" required />
+        </div>
+        <button type="submit" id="submit" class="input-field">Verify</button>
+    </form>
+
+    <script type="module" src="/js/verify.js"></script>
+</body>
+</html>
