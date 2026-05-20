@@ -1,29 +1,35 @@
 use alloc::sync::Arc;
-use core::marker::PhantomData;
-use serde::de::DeserializeOwned;
-use worker::{Env, KvError, KvStore};
+use core::future::Future;
+use worker::{Env, KvError};
 
-pub trait KvInterface: Sized {
-    type Key: ?Sized;
+pub trait KvCore: Sized {
+    fn put_to_remote(&self, env: Arc<Env>) -> impl Future<Output = Result<(), KvError>>;
+    fn delete_from_remote(self, env: Arc<Env>) -> impl Future<Output = Result<(), KvError>>;
 
-    async fn fetch_from_remote(key: &Self::Key, env: Arc<Env>) -> Result<Option<Self>, KvError>;
-
-    async fn put_to_remote(&self, env: Arc<Env>) -> Result<(), KvError>;
-    async fn delete_from_remote(self, env: Arc<Env>) -> Result<(), KvError>;
-
-    async fn check(&self, env: Arc<Env>) -> Result<bool, KvError>;
+    fn check(&self, env: Arc<Env>) -> impl Future<Output = Result<bool, KvError>>;
 }
 
-pub trait KvInterfaceExt: KvInterface {
-    async fn owned_fetch_from_remote(key: Self::Key, env: Arc<Env>) -> Result<Option<Self>, KvError>;
-}
-
-impl<T> KvInterfaceExt for T
+pub trait KvInterface<K>: KvCore
 where
-    T: KvInterface,
-    T::Key: Sized,
+    K: ?Sized,
 {
-    async fn owned_fetch_from_remote(key: Self::Key, env: Arc<Env>) -> Result<Option<Self>, KvError> {
-        Self::fetch_from_remote(&key, env).await
+
+    fn fetch_from_remote(key: &K, env: Arc<Env>) -> impl Future<Output = Result<Option<Self>, KvError>>;
+}
+
+pub trait KvInterfaceOwned<K>: KvCore
+where
+    K: Sized,
+{
+    fn owned_fetch_from_remote(key: K, env: Arc<Env>) -> impl Future<Output = Result<Option<Self>, KvError>>;
+}
+
+impl<T, K> KvInterfaceOwned<K> for T
+where
+    T: KvInterface<K>,
+    K: Sized,
+{
+    async fn owned_fetch_from_remote(key: K, env: Arc<Env>) -> Result<Option<Self>, KvError> {
+        <Self as KvInterface<K>>::fetch_from_remote(&key, env).await
     }
 }

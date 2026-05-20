@@ -19,6 +19,7 @@ function check_wasm {
 }
 
 function optimise_wasm {
+    # --heap2local
     wasm-opt \
         -ifwl -iit -lmu -uim -pii=4 \
         --enable-bulk-memory \
@@ -26,6 +27,7 @@ function optimise_wasm {
         --disable-fp16 \
         --disable-gc \
         --optimize-for-js \
+        --heap2local \
         -O4 \
         -o temp.wasm index_bg.wasm
 
@@ -57,9 +59,9 @@ tsc
 ../node_modules/html-minifier-terser/cli.js \
     --collapse-whitespace --use-short-doctype \
     --file-ext html --input-dir . --output-dir \
-    ../dist
+    ../assets
 
-ls css/*.css | xargs -I "{}" ../node_modules/clean-css-cli/bin/cleancss -dO3 -o "../dist/{}" "{}"
+ls css/*.css | xargs -I "{}" ../node_modules/clean-css-cli/bin/cleancss -dO3 -o "../assets/{}" "{}"
 
 cd ..
 
@@ -70,20 +72,24 @@ cd build
 cp ../target/wasm32-unknown-unknown/release/kolloquy.wasm index.wasm
 
 wasm-bindgen --no-typescript \
+    --experimental-reset-state-function \
     --remove-producers-section --remove-name-section \
-    --target bundler --out-dir . index.wasm
+    --target web --out-dir . index.wasm
 
 # Do not optimise wasm unless this is a release build
 if [[ -n "${RELEASE_BUILD+x}" ]]; then
+    echo "Optimising wasm..."
     optimise_wasm
 fi
 
 cp ../custom-shim.mjs shim.mjs
 
-../node_modules/esbuild/bin/esbuild --minify --bundle shim.mjs --outfile=index.js --allow-overwrite --external:cloudflare:workers --external:./index_bg.wasm --format=esm
+../node_modules/esbuild/bin/esbuild \
+    --bundle shim.mjs --outfile=index.js --allow-overwrite \
+    --external:cloudflare:workers --external:./index_bg.wasm \
+    --format=esm
 
 rm shim.mjs
-rm index_bg.js
 
 cd ..
 

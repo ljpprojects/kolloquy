@@ -6,49 +6,53 @@
 #![feature(core_float_math)]
 #![feature(push_mut)]
 #![feature(associated_type_defaults)]
+#![feature(generic_const_exprs)]
+#![feature(type_alias_impl_trait)]
+#![feature(int_roundings)]
 #![no_std]
 
-mod api;
-mod user;
-mod state;
-mod email;
-mod verify;
-pub(crate) mod crypto;
-pub(crate) mod session;
-pub(crate) mod pwned;
-pub(crate) mod aws;
-pub(crate) mod hex;
-pub(crate) mod reflexive;
-pub(crate) mod realtime;
-pub(crate) mod kv;
-pub(crate) mod d1;
-pub(crate) mod chat;
+use crate::util::ArrayB64EncodeSmallString;
+pub mod api;
+pub mod user;
+pub mod state;
+pub mod email;
+pub mod verify;
+pub mod crypto;
+pub mod session;
+pub mod pwned;
+pub mod aws;
+pub mod reflexive;
+pub mod realtime;
+pub mod kv;
+pub mod d1;
 pub mod refresh;
+pub mod util;
+pub mod webauthn;
 
 extern crate core;
 extern crate alloc;
 
-use handlebars::Handlebars;
-use mini_alloc::MiniAlloc;
-use tower_http::cors::CorsLayer;
-
-pub const INDEX_TEMPLATE: &str = include_str!("../frontend/index.handlebars");
-
 #[global_allocator]
-static ALLOC:MiniAlloc = MiniAlloc::INIT;
+static A: rlsf::SmallGlobalTlsf = rlsf::SmallGlobalTlsf::new();
 
+use crate::session::SESSION_ID_SIZE;
+use crate::refresh::RFTK_SIZE;
 use core::time::Duration;
 use alloc::{boxed::Box, format, string::{String, ToString}, sync::Arc, vec::Vec};
-
+use core::str::FromStr;
 use axum_cookie::{CookieLayer, CookieManager, cookie::Cookie, prelude::SameSite};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use http::{Method, StatusCode, header::{CONTENT_ENCODING, CONTENT_TYPE, LOCATION}};
 use wasm_bindgen::prelude::wasm_bindgen;
-use worker::{Context, Env, Fetcher, console_error};
+use worker::{Context, Env, Fetcher, console_error, Date, Response};
 use axum::{Extension, response::IntoResponse, routing::{get, post}, extract::Json};
+use chrono::{DateTime, Utc};
+use handlebars::Handlebars;
+use password_hash::phc::PasswordHash;
+use tower_http::cors::CorsLayer;
 use tower_service::Service;
 use serde_json::json;
-
+use stack_string::SmallString;
 use crate::{
     api::{
         AuthLoginError,
@@ -71,7 +75,7 @@ use crate::{
     }, d1::D1Interface, email::{
         VERIFICATION_EMAIL_TEMPLATE,
         VerificationEmail
-    }, kv::KvInterface, pwned::password_plaintext_pwned, realtime::api::realtime_router, session::Session, state::WorkerState, user::{
+    }, kv::KvInterface, pwned::password_plaintext_pwned, session::Session, state::WorkerState, user::{
         User,
         UserIdentifyingKey
     }, verify::{
@@ -79,6 +83,10 @@ use crate::{
         VerificationSession
     }
 };
+use crate::d1::D1Core;
+use crate::kv::{KvCore, KvInterfaceOwned};
+use crate::refresh::RefreshToken;
+use crate::user::IDENT_SIZE;
 
 #[worker::send]
 pub async fn test_email(
@@ -107,19 +115,19 @@ pub async fn auth_register(
     Json(payload): Json<AuthRegisterRequest>,
 ) -> GenericAPIResponse<AuthRegisterResponse> {
     // Check if the user exists already
-   if User::fetch_from_remote(&UserIdentifyingKey::Email(payload.email.clone()), state.env.clone()).await.transpose().is_some() {
-       return GenericAPIResponse(
-           StatusCode::CONFLICT, // Status code
-           &[("Content-Type", "application/json")], // Headers
-           AuthRegisterResponse {
-               status: "error".to_string(),
-               error: Some(AuthRegisterError {
-                   code: AuthRegisterErrorCode::UserExists,
-                   message: "A user with this email is already registered.".to_string()
-               }),
-           }
+    if User::fetch_from_remote(&UserIdentifyingKey::Email(payload.email.clone()), state.env.clone()).await.transpose().is_some() {
+        return GenericAPIResponse(
+            StatusCode::CONFLICT, // Status code
+            &[("Content-Type", "application/json")], // Headers
+            AuthRegisterResponse {
+                status: "error".to_string(),
+                error: Some(AuthRegisterError {
+                    code: AuthRegisterErrorCode::UserExists,
+                    message: "A user with this email is already registered.".to_string()
+                }),
+            }
         )
-   }
+    }
 
     // Check if the password is pwned
     if password_plaintext_pwned(&payload.password).await.is_ok_and(|v| v) {
@@ -137,7 +145,21 @@ pub async fn auth_register(
     }
 
     let salt = random_bytes_generic::<32>();
-    let password_hash = compute_password_hash(payload.password, salt, state.env.clone());
+    let password_hash_phc =
+        match compute_password_hash(payload.password, salt, state.env.clone()).await {
+            Ok(phc) => phc,
+            Err(e) => return GenericAPIResponse(
+                StatusCode::BAD_GATEWAY,
+                &[("Content-Type", "application/json")],
+                AuthRegisterResponse {
+                    status: "error".to_string(),
+                    error: Some(AuthRegisterError {
+                        code: AuthRegisterErrorCode::Other,
+                        message: format!("The password failed to be hashed, with error: {e}")
+                    }),
+                }
+            )
+        };
 
     // Prepare email
     let email = VerificationEmail::new(payload.email.clone(), payload.display_name.clone());
@@ -146,12 +168,11 @@ pub async fn auth_register(
     let session = VerificationSession::new(
         payload.email,
         payload.display_name,
-        password_hash,
-        salt,
+        password_hash_phc,
         *email.code()
     );
 
-    let vssid_cookie = Cookie::new("vssid", BASE64_STANDARD.encode(session.id()))
+    let vssid_cookie = Cookie::new("vssid", session.id.clone())
         .with_secure(true)
         .with_http_only(true)
         .with_max_age(Duration::from_secs(verify::SESSION_MAX_AGE))
@@ -212,8 +233,14 @@ macro_rules! setup_user_session {
     ) => {
         let session = Session::new(($user).email, ($user).display_name);
 
+        let mut ssid_b64 = SmallString::<24>::new();
+        BASE64_STANDARD.encode_slice(
+            session.session_id(),
+            unsafe { ssid_b64.as_bytes_mut() }, // Aliasing
+        );
+
         // Set the cookie
-        let session_cookie = Cookie::new("ssid", BASE64_STANDARD.encode(session.session_id()))
+        let session_cookie = Cookie::new("ssid", ssid_b64)
             .with_secure(true)
             .with_http_only(true)
             .with_max_age(Duration::from_secs(30 * 60))
@@ -238,16 +265,29 @@ macro_rules! setup_user_session {
             )
         };
 
-        todo!("FIX THE FUCKING REFRESH TOKEN SYSTEM HOLY FUCK SHIT FUCK IS IT BROKEN LIKE HOLY FUCKING GOD");
+        let mut user_id = [0u8; IDENT_SIZE];
+        BASE64_STANDARD.decode_slice(
+            ($user).id,
+            &mut user_id,
+        ).unwrap();
 
-        // Create a refresh token (112 random bits + 144 bit user id)
-        let refresh_token: [u8; 32] =
-            [random_bytes_generic::<14>().as_slice(), &*BASE64_STANDARD.decode(($user).id).unwrap()]
-                .concat()
-                .try_into()
-                .unwrap();
+        // Create a refresh token
+        let refresh_token = RefreshToken::new(user_id);
+        if let Err(e) = refresh_token.put_to_remote(($state).env.clone()).await {
+            return GenericAPIResponse(
+                StatusCode::BAD_GATEWAY,
+                &[("Content-Type", "application/json")],
+                $ret {
+                    status: "error".to_string(),
+                    error: Some($err {
+                        code: $code::Other,
+                        message: e.to_string()
+                    }),
+                }
+            )
+        }
 
-        let refresh_token_cookie = Cookie::new("rftk", BASE64_STANDARD.encode(refresh_token))
+        let refresh_token_cookie = Cookie::new("rftk", refresh_token.get_entropy_b64())
             .with_secure(true)
             .with_http_only(true)
             .with_max_age(Duration::from_secs(7 * 24 * 60 * 60))
@@ -290,7 +330,7 @@ macro_rules! setup_user_session {
             return $ret,
                 err $err,
                 code $code;
-             with
+            with
                 cookie: ($cookie),
                 state: ($state),
                 !old_session
@@ -318,10 +358,8 @@ pub async fn auth_email_resend(
         )
     };
 
-    let decoded_vssid: [u8; 18] = BASE64_STANDARD.decode(vssid.value()).unwrap().try_into().unwrap();
-
     // Ensure that a verification session exists for the user
-    let mut session = match VerificationSession::fetch_from_remote(&decoded_vssid, state.env.clone()).await {
+    let mut session = match VerificationSession::owned_fetch_from_remote(SmallString::from_str(vssid.value()).unwrap(), state.env.clone()).await {
         Err(e) => {
             return GenericAPIResponse(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -358,7 +396,7 @@ pub async fn auth_email_resend(
                 status: "error".to_string(),
                 error: Some(AuthVerifyError {
                     code: AuthVerifyErrorCode::RateLimit,
-                    message: "The rate limit (once per 2 minutes) has been exceeded.".to_string()
+                    message: "The rate limit (once every 2 minutes) has been exceeded.".to_string()
                 }),
             }
         )
@@ -447,10 +485,8 @@ pub async fn auth_verify(
         )
     };
 
-    let decoded_vssid: [u8; 18] = BASE64_STANDARD.decode(vssid.value()).unwrap().try_into().unwrap();
-
     // Ensure that a verification session exists for the user
-    let mut session = match VerificationSession::fetch_from_remote(&decoded_vssid, state.env.clone()).await {
+    let mut session = match VerificationSession::owned_fetch_from_remote(SmallString::from_str(vssid.value()).unwrap(), state.env.clone()).await {
         Err(e) => {
             return GenericAPIResponse(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -541,16 +577,18 @@ pub async fn auth_verify(
         )
     }
 
+    // I don't think this allocates??????? It shouldn't, right???
+    let now = DateTime::<Utc>::from_timestamp_millis(Date::now().as_millis() as i64).unwrap();
+
     // Create the user
     let user = User {
         id: User::random_id(),
         email: session.user_email.clone(),
-        email_verified: true,
         display_name: session.display_name.clone(),
-        password_salt: session.password_salt,
-        password_hash: session.password_hash,
+        password_hash_phc: session.password_hash_phc.clone(),
         participations: Vec::default(),
         pending_entrances: Vec::default(),
+        creation_time: now,
     };
 
     // Put the user to the db
@@ -592,7 +630,7 @@ pub async fn auth_verify(
         return AuthVerifyResponse,
             err AuthVerifyError,
             code AuthVerifyErrorCode;
-         with
+        with
             cookie: cookie,
             state: state,
             !old_session
@@ -643,31 +681,47 @@ pub async fn auth_login(
         )
     };
 
-    // The hash in the DB
-    let hash_a = user.password_hash;
+    // Hash in DB
+    let hash_a = PasswordHash::new(&user.password_hash_phc).unwrap();
 
-    // The hash of the password we received
-    let hash_b = compute_password_hash(payload.password, user.password_salt, state.env.clone());
+    let mut salt = [0u8; 32];
+    BASE64_STANDARD.decode_slice(
+        hash_a.salt.unwrap(),
+        &mut salt
+    ).unwrap();
 
-    if hash_a != hash_b {
-        return GenericAPIResponse(
-            StatusCode::UNAUTHORIZED,
-            &[("Content-Type", "application/json")],
-            AuthLoginResponse {
-                status: "error".to_string(),
-                error: Some(AuthLoginError {
-                    code: AuthLoginErrorCode::NoSuchUser,
-                    message: "No user with these credentials exists.".to_string(),
-                })
-            }
-        )
-    };
+    // Hash of the password we received
+    let hash_b =
+        match compute_password_hash(payload.password, salt, state.env.clone()).await {
+            Ok(hash) => hash,
+            Err(e) => return GenericAPIResponse(
+                StatusCode::BAD_GATEWAY,
+                &[("Content-Type", "application/json")],
+                AuthLoginResponse {
+                    status: "error".to_string(),
+                    error: Some(AuthLoginError {
+                        code: AuthLoginErrorCode::NoSuchUser,
+                        message: format!("Could not hash password: {e}"),
+                    })
+                }
+            )
+        };
+
+    todo!("Verify hashes on offload server");
 
     let old_session = match cookie.get("ssid") {
-        Some(ssid) => Session::fetch_from_remote(
-            &BASE64_STANDARD.decode(ssid.value()).unwrap().try_into().unwrap(),
-            state.env.clone(),
-        ).await.ok().flatten(),
+        Some(ssid_cookie) => {
+            let mut ssid = [0u8; SESSION_ID_SIZE];
+            BASE64_STANDARD.decode_slice(
+                ssid_cookie.value(),
+                &mut ssid,
+            ).unwrap();
+
+            Session::fetch_from_remote(
+                &ssid,
+                state.env.clone(),
+            ).await.ok().flatten()
+        },
         None => None,
     };
 
@@ -729,7 +783,7 @@ pub async fn index(
     Extension(state): Extension<WorkerState>,
     cookie: CookieManager,
 ) -> GenericResponse<String> {
-    let session = get_session!(
+    let session = get_session_m!(
         with
             cookie_jar: cookie,
             state: state
@@ -748,20 +802,65 @@ pub async fn index(
     )
 }
 
-fn router(env: Arc<Env>, ctx: Arc<Context>) -> axum::Router {
+macro_rules! runtime_asset {
+    ($assets: expr => [text] $name: literal) => {{
+        let mut asset: Response = ($assets).fetch($name, None)
+            .await
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        // ew
+        asset.text().await.unwrap()
+    }};
+
+    ($assets: expr => [bytes] $name: literal) => {{
+        let mut asset: Response = ($assets).fetch($name, None)
+            .await
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        // ew
+        asset.bytes().await.unwrap()
+    }};
+
+    ($assets: expr => [json<$t: path>] $name: literal) => {{
+        let mut asset: Response = ($assets).fetch($name, None)
+            .await
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        // ew
+        asset.json::<$t>().await.unwrap()
+    }};
+}
+
+/// vro wtf is going on why is the router function async (it is async because it loads shit at runtime)
+async fn router(env: Arc<Env>, ctx: Arc<Context>) -> axum::Router {
+    let assets = env.assets("ASSETS").unwrap();
+
+    // Better allocate this whole template than embed it into the binary
+    // macro magic
+    let verification_email_template =
+        runtime_asset!(assets => [text] "http://internal/verification-email.handlebars");
+
+    // Same here
+    let index_template =
+        runtime_asset!(assets => [text] "http://internal/index.handlebars");
+
     let mut hbars = Handlebars::new();
-    hbars.register_template_string("email_verification", VERIFICATION_EMAIL_TEMPLATE).unwrap();
-    hbars.register_template_string("index", INDEX_TEMPLATE).unwrap();
+    hbars.register_template_string("email_verification", verification_email_template).unwrap();
+    hbars.register_template_string("index", index_template).unwrap();
 
     let hbars = Arc::new(hbars);
-
-    env.get_binding::<Fetcher>("MTLS_CLIENT_CERT").unwrap();
 
     axum::Router::new()
         .route("/", get(index))
         .route("/testmail", post(test_email))
         .nest("/auth", auth_router(env.clone(), ctx.clone(), hbars.clone()))
-        .nest("/rt", realtime_router(env.clone(), ctx.clone(), hbars.clone()))
+        //.nest("/rt", realtime_router(env.clone(), ctx.clone(), hbars.clone()))
         .layer(CookieLayer::default())
         .layer(Extension(WorkerState {
             env,
@@ -777,30 +876,20 @@ pub async fn fetch(
     env: Env,
     ctx: worker::worker_sys::Context
 ) -> web_sys::Response {
-    let ctx = worker::Context::new(ctx);
+    // Does NOT allocate
+    let ctx = Context::new(ctx);
 
+    // Allocates
     match worker::FromRequest::from_raw(req) {
-        Ok(req) => {
-            match router(Arc::new(env), Arc::new(ctx)).call(req).await {
-                Ok(raw_res) => {
-                    match worker::IntoResponse::into_raw(raw_res) {
-                        Ok(res) => res,
-                        Err(err) => {
-                            let e: Box<dyn core::error::Error> = err.into();
-                            console_error!("Error converting response: {}", &e);
-
-                            worker::Response::error(e.to_string(), 500).unwrap().into()
-                        }
-                    }
-                },
-                Err(err) => {
-                    let e: Box<dyn core::error::Error> = err.into();
-                    console_error!("{}", &e);
-
-                    worker::Response::error(e.to_string(), 500).unwrap().into()
-                }
-            }
-        },
+        Ok(req) =>
+            router(Arc::new(env), Arc::new(ctx))
+                .await // don't ask
+                .call(req) // Error type is Infallible, so unwrap is safe
+                .await
+                .map(worker::IntoResponse::into_raw)
+                .unwrap()
+                .map_err(Into::into)
+                .unwrap(), // This unwrap isnt "safe" but like proper error handling is ugly here
         Err(err) => {
             let e: Box<dyn core::error::Error> = err.into();
             console_error!("Error converting request: {}", &e);
