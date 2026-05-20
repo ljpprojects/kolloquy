@@ -1,10 +1,11 @@
 use alloc::{borrow::ToOwned, format, string::{String, ToString}, sync::Arc, vec::Vec};
+use stack_string::SmallString;
 use stackvec::StackVec;
 use url::Url;
 use wasm_bindgen::JsValue;
 use worker::{Env, crypto::{DigestStream, DigestStreamAlgorithm}};
 
-use crate::{crypto::native_webcrypto_hash, hex::hex_encode};
+use crate::crypto::native_webcrypto_hash;
 
 async fn call_api(hash_chars: &str) -> Result<Vec<(String, u32)>, worker::Error> {
     let formatted_url = format!("https://api.pwnedpasswords.com/range/{hash_chars}");
@@ -23,7 +24,7 @@ async fn call_api(hash_chars: &str) -> Result<Vec<(String, u32)>, worker::Error>
 }
 
 /// **HASH SHOULD BE IN ALL CAPS**
-pub async fn password_hash_pwned(hash: String) -> Result<bool, worker::Error> {
+pub async fn password_hash_pwned(hash: &str) -> Result<bool, worker::Error> {
     // Oh the hidden allocations!
 
     // Call the api and discard counts
@@ -37,8 +38,18 @@ pub async fn password_hash_pwned(hash: String) -> Result<bool, worker::Error> {
 
 pub async fn password_plaintext_pwned(plaintext: &str) -> Result<bool, worker::Error> {
     // Hash the password
-    let bytes = native_webcrypto_hash(DigestStreamAlgorithm::Sha1, plaintext).await;
-    let hex_hash: String = hex_encode(bytes);
+    let bytes: [u8; 20] = native_webcrypto_hash(DigestStreamAlgorithm::Sha1, plaintext).await.unwrap();
+    let mut hex_hash = SmallString::<40>::new();
+    hex::encode_to_slice(
+        bytes,
+        unsafe { hex_hash.as_bytes_mut() }, // Aliasing
+    ).unwrap();
+    
+    unsafe {
+        for b in hex_hash.as_bytes_mut() {
+            *b = b.to_ascii_uppercase();
+        }
+    }
 
-    password_hash_pwned(hex_hash.to_uppercase()).await
+    password_hash_pwned(hex_hash.as_str()).await
 }

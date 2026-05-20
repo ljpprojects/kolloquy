@@ -1,0 +1,1 @@
+#digits{display:flex;gap:1vw}.input-digit::-webkit-inner-spin-button,.input-digit::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.input-digit{text-align:center;font-size:2em;font-weight:700;-moz-appearance:textfield;appearance:textfield;height:9vh;width:6vh;border:2px solid #000;border-radius:.5vmin;padding:.5vmin}

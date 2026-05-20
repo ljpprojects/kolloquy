@@ -1,19 +1,23 @@
-use alloc::{format, string::ToString, sync::Arc, vec::Vec};
-use alloc::string::String;
+use alloc::{format, sync::Arc};
+use alloc::string::{String, ToString};
+use core::cell::LazyCell;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use serde_json::json;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{CryptoKey, ReadableByteStreamController};
-use worker::{Env, crypto::{DigestStream, DigestStreamAlgorithm}, js_sys::{self, Array, ArrayBuffer, Object, Reflect, Uint8Array, global}, Fetcher, RequestInit, Method, Request, Response};
+use web_sys::{Crypto, CryptoKey, ReadableByteStreamController};
+use worker::{Env, crypto::{DigestStream, DigestStreamAlgorithm}, js_sys::{Array, ArrayBuffer, Object, Reflect, Uint8Array, global}, Fetcher, RequestInit, Method, Request, Response};
 use wasm_bindgen::{JsValue, convert::TryFromJsValue, prelude::Closure};
 
+static mut WEBCRYPTO: LazyCell<Crypto> = LazyCell::new(|| Crypto::from(
+    Reflect::get(&global(), &"crypto".into())
+        .unwrap()
+));
 
-pub fn webcrypto() -> web_sys::Crypto {
-    web_sys::Crypto::from(
-        js_sys::Reflect::get(&global(), &"crypto".into())
-            .unwrap()
-    )
+pub fn webcrypto() -> &'static Crypto {
+    unsafe {
+        &*WEBCRYPTO
+    }
 }
 
 pub fn random_byte() -> u8 {
@@ -22,14 +26,6 @@ pub fn random_byte() -> u8 {
     webcrypto().get_random_values_with_u8_array(&mut arr).unwrap();
 
     arr[0]
-}
-
-pub fn _random_bytes(count: u32) -> Vec<u8> {
-    let mut arr = Vec::with_capacity(count as usize);
-
-    webcrypto().get_random_values_with_u8_array(&mut arr).unwrap();
-
-    arr
 }
 
 pub fn random_bytes_generic<const COUNT: usize>() -> [u8; COUNT] {
@@ -60,19 +56,31 @@ where
 {
     let store = env.secret_store("ARGON_SECRET").unwrap();
 
-    // A "multitude" of secrets are used
-    let pepper = BASE64_STANDARD.decode(env.secret("ARGON_PEPPER").unwrap().to_string()).unwrap();
-    let mut secret = BASE64_STANDARD.decode(store.get().await.unwrap().unwrap()).unwrap();
+    let mut pepper = [0u8; 32];
+    BASE64_STANDARD.decode_slice(
+        // Allocation here is inevitable
+        env.secret("PHASH_PEPPER").unwrap().to_string(),
+        &mut pepper,
+    ).unwrap();
 
-    secret.extend(pepper);
-    secret.extend(salt);
+    let mut secret = [0u8; 384];
+    BASE64_STANDARD.decode_slice(
+        // Allocation here is inevitable
+        store.get().await.unwrap().unwrap(),
+        &mut secret,
+    ).unwrap();
+
+    let mut full_secret = [0u8; 416];
+
+    full_secret[0..32].copy_from_slice(&pepper);
+    full_secret[32..].copy_from_slice(&secret);
 
     // Secret is now full
 
-    let data = [&*secret, password.as_ref()].concat();
-    let digest = native_webcrypto_hash(DigestStreamAlgorithm::Sha256, data).await;
+    // Allocation here is inevitable
+    let data = [&full_secret, password.as_ref()].concat();
 
-    digest.try_into().unwrap()
+    native_webcrypto_hash(DigestStreamAlgorithm::Sha256, data).await.unwrap()
 }
 
 /// Calls stage 2 of the password hashing algorithm.
@@ -98,7 +106,7 @@ pub async fn call_phash_stage_2(
         Request::new_with_init("https://phash.kolloquy.com", &req_init)
             .unwrap();
 
-    let mut response =
+    let response =
         mtls_fetcher.fetch_request(req).await?;
 
     let mut response = Response::try_from(response)?;
@@ -134,13 +142,11 @@ where
 }
 
 /// Computes the hash of some data using the specified algorithm using the native WebCrypto API (available in workers)
-pub async fn native_webcrypto_hash<T: AsRef<[u8]>>(algorithm: DigestStreamAlgorithm, data: T) -> Vec<u8> {
+///
+/// Returns None if S does not match the length of the digest.
+pub async fn native_webcrypto_hash<const S: usize, T: AsRef<[u8]>>(algorithm: DigestStreamAlgorithm, data: T) -> Option<[u8; S]> {
     let hasher = DigestStream::new(algorithm);
-
     let data_array = Uint8Array::new_from_slice(data.as_ref());
-    let underlying_source = Object::new();
-
-    // We need to
 
     let start_fn = Closure::once_into_js(move |controller: JsValue| {
         // Cast the value we receive from the closure into ReadableByteStreamController
@@ -151,6 +157,8 @@ pub async fn native_webcrypto_hash<T: AsRef<[u8]>>(algorithm: DigestStreamAlgori
         controller.enqueue_with_js_u8_array(&data_array).unwrap();
         controller.close().unwrap();
     });
+
+    let underlying_source = Object::new();
 
     // Set the start property of the underlying source to our start function
     // Sadly, there is no Object::set or similar function
@@ -166,13 +174,20 @@ pub async fn native_webcrypto_hash<T: AsRef<[u8]>>(algorithm: DigestStreamAlgori
     // We do not need to await this promise, only the promise returned by .digest()
     let _ = stream.pipe_to(hasher.raw());
 
-    let bytes = hasher.digest().await.unwrap().to_vec();
+    let bytes_array = hasher.digest().await.unwrap();
 
-    bytes.try_into().unwrap()
+    if S != bytes_array.byte_length() as usize {
+        return None
+    }
+
+    let mut bytes = [0u8; S];
+    bytes_array.copy_to(&mut bytes);
+
+    Some(bytes)
 }
 
 /// Calculate the Hmac<Sha256> hash using only the native SubtleCrypto API.
-pub async fn native_hmac_sha256<A: AsRef<[u8]>, B: AsRef<[u8]>>(key: A, data: B) -> Vec<u8> {
+pub async fn native_hmac_sha256<A: AsRef<[u8]>, B: AsRef<[u8]>>(key: A, data: B) -> [u8; 32] {
     let (key, data) = (key.as_ref(), data.as_ref());
     let key = Uint8Array::new_from_slice(key);
 
@@ -204,6 +219,14 @@ pub async fn native_hmac_sha256<A: AsRef<[u8]>, B: AsRef<[u8]>>(key: A, data: B)
     ).unwrap()).await.unwrap();
 
     let signature_buffer = ArrayBuffer::try_from_js_value(signature).unwrap();
+    let signature_buffer = Uint8Array::new(&signature_buffer);
 
-    Uint8Array::new(&signature_buffer).to_vec()
+    let mut signature = [0u8; 32];
+
+    for i in 0..signature_buffer.byte_length() {
+        // Surely this doesn't allocate, right??????????
+        signature[i as usize] = signature_buffer.at(i as i32).unwrap();
+    };
+
+    signature
 }

@@ -1,92 +1,72 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-
 import defaultModule from "./index_bg.wasm";
-import * as exports from "./index_bg.js";
+import __wbg_init, { fetch, setPanicHook, __wbg_reset_state } from "./index.js";
 
-const imports = {
-  "./index_bg.js": exports,
-  __wbindgen_placeholder__: exports,
-  __wbindgen_externref_xform__: {
-    __wbindgen_externref_table_grow(delta) {
-      console.error("__wbindgen_externref_table_grow USED", `delta = ${delta}`)
-    },
-
-    __wbindgen_externref_table_set_null(idx) {
-      console.error("__wbindgen_externref_table_set_null USED", `idx = ${idx}`)
-    }
-  }
-};
-
-const instance = new WebAssembly.Instance(defaultModule, imports);
-exports.__wbg_set_wasm(instance.exports);
-
-Error.stackTraceLimit = 100;
+await __wbg_init(defaultModule);
 
 let criticalError = false;
 
-const registerPanicHook = () => {
-  if (exports.setPanicHook) {
-    exports.setPanicHook(message => {
-      const panicError = new Error(`Rust panic: ${message}`);
-      console.error('Critical', panicError);
+const registerPanicHook = () => setPanicHook(message => {
+  const panicError = new Error(`Rust panic: ${message}`);
+  console.error('Critical', panicError);
 
-      criticalError = true;
-    });
-  }
-}
+  criticalError = true;
+});
 
 registerPanicHook();
 
 let instanceId = 0;
 const checkReinitialise = () => {
   if (criticalError) {
-    console.log("Reinitialising Wasm application");
-    exports.__wbg_reset_state();
-    criticalError = false;
+    console.log("Reinitialising Wasm application (due to critical error that occurred earlier)");
+    console.info(`Instance ID is ${instanceId}.`)
+
+    __wbg_reset_state();
     registerPanicHook();
+
+    criticalError = false;
     instanceId++;
   }
 }
 
-addEventListener('error', e => {
-  handleMaybeCritical(e.error);
-});
+addEventListener('error', e => handleMaybeCritical(e.error));
 
 const handleMaybeCritical = e => {
   if (e instanceof WebAssembly.RuntimeError) {
     console.error('Critical', e);
     criticalError = true;
   } else {
-    console.warn('Error', e);
+    console.error('Error', e);
   }
 }
 
 class Entrypoint extends WorkerEntrypoint {
   constructor(ctx, env) {
-    super(ctx, env); // Just in case
+    super(ctx, env);
 
     this.ctx = ctx;
     this.env = env;
   }
 
   async fetch(req) {
-    return await exports.fetch(req, this.env, this.ctx);
+    return await fetch(req, this.env, this.ctx);
   }
 }
 
+// Proxy hooks which are "transparent" to make sure that the object is still an Object
 const instanceProxyHooks = {
   set: (target, prop, value, receiver) => Reflect.set(target.instance, prop, value, receiver),
   has: (target, prop) => Reflect.has(target.instance, prop),
   deleteProperty: (target, prop) => Reflect.deleteProperty(target.instance, prop),
   apply: (target, thisArg, args) => Reflect.apply(target.instance, thisArg, args),
   construct: (target, args, newTarget) => Reflect.construct(target.instance, args, newTarget),
-  getPrototypeOf: target => Reflect.getPrototypeOf(target.instance),
+  getPrototypeOf: (target) => Reflect.getPrototypeOf(target.instance),
   setPrototypeOf: (target, proto) => Reflect.setPrototypeOf(target.instance, proto),
-  isExtensible: target => Reflect.isExtensible(target.instance),
-  preventExtensions: target => Reflect.preventExtensions(target.instance),
+  isExtensible: (target) => Reflect.isExtensible(target.instance),
+  preventExtensions: (target) => Reflect.preventExtensions(target.instance),
   getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target.instance, prop),
   defineProperty: (target, prop, descriptor) => Reflect.defineProperty(target.instance, prop, descriptor),
-  ownKeys: target => Reflect.ownKeys(target.instance),
+  ownKeys: (target) => Reflect.ownKeys(target.instance),
 };
 
 const classProxyHooks = {
@@ -111,7 +91,7 @@ const classProxyHooks = {
           }
 
           const original = Reflect.get(target.instance, prop, receiver);
-          if (typeof original !== "function") return original;
+          if (typeof original !== 'function') return original;
 
           if (original.constructor === Function) {
             return new Proxy(original, {
@@ -144,7 +124,6 @@ const classProxyHooks = {
       });
     } catch (e) {
       criticalError = true;
-
       throw e;
     }
   }

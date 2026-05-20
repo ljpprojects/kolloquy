@@ -10,6 +10,7 @@ use wasm_bindgen::JsValue;
 use worker::{Env, KvError, Method, Request, RequestInit};
 
 use crate::{kv::KvInterface, realtime::api::{CfNewSessionResponse, DataChanAddResp, CfDataTransportResponse, RenegotiateResponse}};
+use crate::kv::KvCore;
 
 pub const RT_API_BASE: &str = "https://rtc.live.cloudflare.com/v1";
 
@@ -215,27 +216,7 @@ impl RealtimeSession {
     }
 }
 
-impl KvInterface for RealtimeSession {
-    type Key = str;
-
-    async fn fetch_from_remote(user_id: &str, env: Arc<Env>) -> Result<Option<Self>, KvError> {
-        let kv = env.kv("kSESSIONS").unwrap();
-
-        let Some(data) = kv.get(&*format!("rt:{user_id}"))
-            .cache_ttl(KV_CACHE_TTL)
-            .json::<RealtimeSessionData>()
-            .await?
-        else {
-            return Ok(None)
-        };
-
-        Ok(Some(Self {
-            user_id: user_id.to_owned(),
-            session_id: data.session_id,
-            session_data_tracks: data.data_tracks.unwrap_or_default()
-        }))
-    }
-
+impl KvCore for RealtimeSession {
     /// Puts the session into the KV.
     ///
     /// **THIS DOES NOT CREATE THE SESSION USING CLOUDFLARE'S API.**
@@ -276,5 +257,26 @@ impl KvInterface for RealtimeSession {
             .await;
 
         res.map(|v| v.is_some())
+    }
+}
+
+impl KvInterface<str> for RealtimeSession {
+
+    async fn fetch_from_remote(user_id: &str, env: Arc<Env>) -> Result<Option<Self>, KvError> {
+        let kv = env.kv("kSESSIONS").unwrap();
+
+        let Some(data) = kv.get(&*format!("rt:{user_id}"))
+            .cache_ttl(KV_CACHE_TTL)
+            .json::<RealtimeSessionData>()
+            .await?
+        else {
+            return Ok(None)
+        };
+
+        Ok(Some(Self {
+            user_id: user_id.to_owned(),
+            session_id: data.session_id,
+            session_data_tracks: data.data_tracks.unwrap_or_default()
+        }))
     }
 }

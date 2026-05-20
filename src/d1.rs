@@ -1,26 +1,32 @@
 use alloc::{string::ToString, sync::Arc};
+use core::future::Future;
 use worker::{D1Error, Env};
 
-// The lifetimes indicate to the co
-pub trait D1Interface: Sized {
-    type Key: ?Sized;
-
-    async fn fetch_from_remote(key: &Self::Key, env: Arc<Env>) -> Result<Option<Self>, worker::Error>;
-
-    async fn put_to_remote(&self, env: Arc<Env>) -> Result<(), worker::Error>;
-    async fn delete_from_remote(self, env: Arc<Env>) -> Result<(), worker::Error>;
+pub trait D1Core: Sized {
+    fn put_to_remote(&self, env: Arc<Env>) -> impl Future<Output = Result<(), worker::Error>>;
+    fn delete_from_remote(self, env: Arc<Env>) -> impl Future<Output = Result<(), worker::Error>>;
 }
 
-pub trait D1InterfaceExt: D1Interface {
-    async fn owned_fetch_from_remote(key: Self::Key, env: Arc<Env>) -> Result<Option<Self>, worker::Error>;
-}
-
-impl<T> D1InterfaceExt for T
+pub trait D1Interface<K>: D1Core
 where
-    T: D1Interface,
-    T::Key: Sized,
+    K: ?Sized,
 {
-    async fn owned_fetch_from_remote(key: Self::Key, env: Arc<Env>) -> Result<Option<Self>, worker::Error> {
-        Self::fetch_from_remote(&key, env).await
+    fn fetch_from_remote(key: &K, env: Arc<Env>) -> impl Future<Output = Result<Option<Self>, worker::Error>>;
+}
+
+pub trait D1InterfaceOwned<K>: D1Core
+where
+    K: Sized,
+{
+    fn owned_fetch_from_remote(key: K, env: Arc<Env>) -> impl Future<Output = Result<Option<Self>, worker::Error>>;
+}
+
+impl<T, K> D1InterfaceOwned<K> for T
+where
+    T: D1Interface<K>,
+    K: Sized,
+{
+    async fn owned_fetch_from_remote(key: K, env: Arc<Env>) -> Result<Option<Self>, worker::Error> {
+        <Self as D1Interface<K>>::fetch_from_remote(&key, env).await
     }
 }

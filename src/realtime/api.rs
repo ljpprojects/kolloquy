@@ -1,15 +1,5 @@
-use core::time::Duration;
-
-use alloc::{format, string::{String, ToString}, sync::Arc, vec::Vec};
-use axum::{Extension, routing::post};
-use axum_cookie::{CookieLayer, CookieManager, cookie::Cookie, prelude::SameSite};
-use base64::{Engine, prelude::BASE64_STANDARD};
-use handlebars::Handlebars;
-use http::StatusCode;
+use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use worker::{Context, Env};
-
-use crate::{api::GenericAPIResponse, crypto::random_bytes_generic, d1::D1Interface, kv::KvInterface, realtime::RealtimeSession, session::Session, state::WorkerState, user::{User, UserIdentifyingKey}};
 
 /***** /rt/session/new *****/
 
@@ -121,131 +111,17 @@ pub struct DataChanAddResp {
 
 /***** HANDLERS ******/
 
+/*
 #[worker::send]
 pub async fn new_session(
     Extension(state): Extension<WorkerState>,
     cookie: CookieManager,
 ) -> GenericAPIResponse<NewSessionResponse> {
-    let session = {
-        match (cookie.get("ssid"), cookie.get("rftk")) {
-            (Some(ssid), _) => {
-                let decoded_ssid: [u8; 18] = BASE64_STANDARD.decode(ssid.value()).unwrap().try_into().unwrap();
-
-                // Ensure that a session exists for the user
-                match Session::fetch_from_remote(&decoded_ssid, state.env.clone()).await {
-                    Err(e) => {
-                        return GenericAPIResponse(
-                            StatusCode::BAD_GATEWAY,
-                            &[("Content-Type", "application.json")],
-                            NewSessionResponse {
-                                session_id: None,
-                                error: Some(NewSessionError {
-                                    code: NewSessionErrorCode::Other,
-                                    message: format!("502 Bad Gateway (error fetching from KV): {e}"),
-                                })
-                            }
-                        )
-                    },
-                    Ok(Some(session)) => session,
-                    Ok(None) => return GenericAPIResponse(
-                        StatusCode::TEMPORARY_REDIRECT,
-                        &[("Content-Type", "application/json")],
-                        NewSessionResponse {
-                            session_id: None,
-                            error: Some(NewSessionError {
-                                code: NewSessionErrorCode::Unauthenticated,
-                                message: "Unauthorised (did you call /auth/login?)".to_string(),
-                            })
-                        }
-                    )
-                }
-            },
-            (None, Some(rftk)) => {
-                let decoded_rftk: [u8; 32] = BASE64_STANDARD.decode(rftk.value()).unwrap().try_into().unwrap();
-                let user_id: [u8; 18] = decoded_rftk[14..].try_into().unwrap();
-
-                match Session::fetch_from_remote(&user_id, state.env.clone()).await {
-                    Ok(Some(session)) => {
-                        if let Err(e) = session.put_to_remote(state.env.clone()).await {
-                            return GenericAPIResponse(
-                                StatusCode::BAD_GATEWAY,
-                                &[("Content-Type", "application/json")],
-                                NewSessionResponse {
-                                    session_id: None,
-                                    error: Some(NewSessionError {
-                                        code: NewSessionErrorCode::Other,
-                                        message: format!("502 Bad Gateway (error putting to KV): {e}")
-                                    })
-                                }
-                            )
-                        }
-
-                        let session_cookie = Cookie::new("ssid", BASE64_STANDARD.encode(session.session_id()))
-                            .with_secure(true)
-                            .with_http_only(true)
-                            .with_max_age(Duration::from_secs(30 * 60))
-                            .with_same_site(SameSite::Strict)
-                            .with_path("/");
-
-                        // Set the session token cookie
-                        cookie.add(session_cookie);
-
-                        // Create a refresh token (112 random bits + 144 bit user id)
-                        let refresh_token: [u8; 32] =
-                            [random_bytes_generic::<14>().as_slice(), &*BASE64_STANDARD.decode(user_id).unwrap()]
-                                .concat()
-                                .try_into()
-                                .unwrap();
-
-                        let refresh_token_cookie = Cookie::new("rftk", BASE64_STANDARD.encode(refresh_token))
-                            .with_secure(true)
-                            .with_http_only(true)
-                            .with_max_age(Duration::from_secs(45 * 24 * 60 * 60))
-                            .with_same_site(SameSite::Strict)
-                            .with_path("/");
-
-                        // Rotate the refresh token cookie
-                        cookie.add(refresh_token_cookie);
-
-                        session
-                    },
-                    Ok(None) => return GenericAPIResponse(
-                        StatusCode::TEMPORARY_REDIRECT,
-                        &[("Content-Type", "application/json")],
-                        NewSessionResponse {
-                            session_id: None,
-                            error: Some(NewSessionError {
-                                code: NewSessionErrorCode::NoSuchUser,
-                                message: "No such user (did you call /auth/register?)".to_string()
-                            })
-                        }
-                    ),
-                    Err(e) => return GenericAPIResponse(
-                        StatusCode::BAD_GATEWAY,
-                        &[("Content-Type", "application/json")],
-                        NewSessionResponse {
-                            session_id: None,
-                            error: Some(NewSessionError {
-                                code: NewSessionErrorCode::Other,
-                                message: format!("502 Bad Gateway (error putting to KV): {e}")
-                            })
-                        }
-                    )
-                }
-            },
-            (None, None) => return GenericAPIResponse(
-                StatusCode::TEMPORARY_REDIRECT,
-                &[("Content-Type", "application/json")],
-                NewSessionResponse {
-                    session_id: None,
-                    error: Some(NewSessionError {
-                        code: NewSessionErrorCode::NoSuchUser,
-                        message: "Unauthorised (did you call /auth/login?)".to_string(),
-                    })
-                }
-            )
-        }
-    };
+    let session = get_session!(
+        with
+            cookie_jar: cookie,
+            state: state
+    );
 
     let user = match User::fetch_from_remote(&UserIdentifyingKey::SessionId(*session.session_id()), state.env.clone()).await {
         Ok(Some(user)) => user,
@@ -310,3 +186,4 @@ pub fn realtime_router(env: Arc<Env>, ctx: Arc<Context>, hbars: Arc<Handlebars<'
             hbars,
         }))
 }
+*/

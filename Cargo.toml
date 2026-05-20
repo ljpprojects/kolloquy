@@ -14,13 +14,13 @@ opt-level = "z"
 strip = true
 panic = "abort"
 
+[workspace]
+resolver = "3"
+members = ["kolloquy-state"]
+
 [dependencies.worker]
 version = "0.7"
 features = ["http", "d1", "axum"]
-
-[dependencies.worker-macros]
-version = "0.7"
-features = ["http"]
 
 [dependencies.axum]
 version = "0.8"
@@ -43,17 +43,11 @@ default-features = false
 [dependencies.base64]
 version = "0.22"
 default-features = false
-features = ["alloc"]
 
 [dependencies.web-sys]
 version = "0.3"
 default-features = false
 features = ["Crypto", "Window", "SubtleCrypto", "CryptoKey"]
-
-[dependencies.argon2]
-version = "0.6.0-rc.5"
-default-features = false
-features = ["alloc"]
 
 [dependencies.handlebars]
 version = "6.4"
@@ -63,17 +57,10 @@ features = ["no_logging"]
 [dependencies.chrono]
 version = "0.4"
 default-features = false
-features = ["alloc"]
 
 [dependencies.hex]
 version = "0.4"
 default-features = false
-features = ["alloc"]
-
-[dependencies.futures-lite]
-version = "2.6"
-default-features = false
-features = ["alloc"]
 
 [dependencies]
 http = "1.4"
@@ -82,7 +69,11 @@ tower-http = { version = "0.6", features = ["cors"] }
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2"
 axum-cookie = "0.2"
-mini-alloc = "1.0"
-triple-r = "0.2"
 const_format = "0.2"
-stackvec = "0.2.1"
+stackvec = "0.2"
+stack-string = "1.1.5"
+password-hash = { version = "0.6.0-rc.12", features = ["phc"] }
+rlsf = "0.2.2"
+arrayvec = { version = "0.7.6", features = ["serde"] }
+webauthn-rs-proto = "0.5"
+base64urlsafedata = "0.5"

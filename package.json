@@ -1,9 +1,7 @@
 {
   "devDependencies": {
     "esbuild": "^0.27.2",
-    "wrangler": "^4.55.0"
-  },
-  "dependencies": {
+    "wrangler": "^4.55.0",
     "clean-css-cli": "^5.6.3",
     "html-minifier-terser": "^7.2.0",
     "typescript": "^5.9.3"
