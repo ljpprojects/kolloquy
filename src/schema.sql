@@ -139,10 +139,11 @@ create table user_passkeys(
 
 -- Stores totp info for a user
 create table users_totp(
-    wrapped_secret text not null unique, -- The 20b secret (wrapped by a secret global key),
-    user_id text not null,
+    wrapped_secret text not null unique
+        check (length(wrapped_secret) = 43), -- The 20b secret (wrapped by a secret global key using AES-KW),
+    id text not null,
 
-    primary key(wrapped_secret, user_id),
+    primary key(wrapped_secret, id),
 
     -- I couldn't bring myself to do it (say it aloud, that is)
     -- Also on further inspection that QR code led to a REFERRAL form
@@ -153,7 +154,7 @@ create table users_totp(
     -- but that will probably be insufficient
     -- Crisis lines are good and all... until I find myself in a crisis I guess
 
-    foreign key(user_id) references users(id)
+    foreign key(id) references users(id)
         on delete cascade
 )
 

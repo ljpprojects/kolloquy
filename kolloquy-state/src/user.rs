@@ -50,15 +50,16 @@ impl User {
         let query = r#"
             select * from users
             where id = ?1
-        "#.trim();
+        "#
+        .trim();
 
         let mut encoded_id = SmallString::<IDENT_B64_CHARS>::new();
-        B64_ENCODER.encode_slice(&id, unsafe { encoded_id.as_bytes_mut() }).unwrap();
+        B64_ENCODER
+            .encode_slice(&id, unsafe { encoded_id.as_bytes_mut() })
+            .unwrap();
 
-        let results: D1Result = query_db::<&str>(
-            (query, &[JsValue::from_str(&*encoded_id)]),
-            env
-        ).await?;
+        let results: D1Result =
+            query_db::<&str>((query, &[JsValue::from_str(&*encoded_id)]), env).await?;
 
         #[allow(non_camel_case_types)]
         #[derive(Deserialize)]
@@ -77,7 +78,9 @@ impl User {
         };
 
         let mut id = [0u8; IDENT_SIZE];
-        B64_ENCODER.decode_slice(result.id.as_bytes(), &mut id).unwrap();
+        B64_ENCODER
+            .decode_slice(result.id.as_bytes(), &mut id)
+            .unwrap();
 
         Ok(Some(Self {
             id,
@@ -85,25 +88,29 @@ impl User {
             password_hash_phc: result.password_phc,
             email: result.email,
             phone_number_hash: result.phone_number,
-            attachment_pubkey: result.attachment_pubkey
+            attachment_pubkey: result.attachment_pubkey,
         }))
     }
 
-    pub async fn fetch_with_devices(id: [u8; IDENT_SIZE], env: Arc<Env>) -> Result<Option<(Self, Vec<UserDevice>)>, worker::Error> {
+    pub async fn fetch_with_devices(
+        id: [u8; IDENT_SIZE],
+        env: Arc<Env>,
+    ) -> Result<Option<(Self, Vec<UserDevice>)>, worker::Error> {
         let query = r#"
             select * from users
             where id = ?1
             join user_devices
             using (id);
-        "#.trim();
+        "#
+        .trim();
 
         let mut encoded_id = SmallString::<IDENT_B64_CHARS>::new();
-        B64_ENCODER.encode_slice(&id, unsafe { encoded_id.as_bytes_mut() }).unwrap();
+        B64_ENCODER
+            .encode_slice(&id, unsafe { encoded_id.as_bytes_mut() })
+            .unwrap();
 
-        let results: D1Result = query_db::<&str>(
-            (query, &[JsValue::from_str(&*encoded_id)]),
-            env
-        ).await?;
+        let results: D1Result =
+            query_db::<&str>((query, &[JsValue::from_str(&*encoded_id)]), env).await?;
 
         #[allow(non_camel_case_types)]
         #[derive(Clone, Deserialize)]
@@ -136,12 +143,14 @@ impl User {
             devices.push(UserDevice {
                 device_number: row.d_devno,
                 is_independent: row.d_is_independent,
-                nickname: row.d_nickname
+                nickname: row.d_nickname,
             });
 
             if i == 0 {
                 let mut id = [0u8; IDENT_SIZE];
-                B64_ENCODER.decode_slice(row.u_id.as_bytes(), &mut id).unwrap();
+                B64_ENCODER
+                    .decode_slice(row.u_id.as_bytes(), &mut id)
+                    .unwrap();
 
                 user = User {
                     id,
@@ -149,7 +158,7 @@ impl User {
                     password_hash_phc: row.u_password_phc,
                     email: row.u_email,
                     phone_number_hash: row.u_phone_number,
-                    attachment_pubkey: row.u_attachment_pubkey
+                    attachment_pubkey: row.u_attachment_pubkey,
                 };
             }
 
@@ -159,21 +168,25 @@ impl User {
         Ok(Some((user, devices)))
     }
 
-    pub async fn fetch_with_totp(id: [u8; IDENT_SIZE], env: Arc<Env>) -> Result<Option<(Self, Vec<UserTOTP>)>, worker::Error> {
+    pub async fn fetch_with_totp(
+        id: [u8; IDENT_SIZE],
+        env: Arc<Env>,
+    ) -> Result<Option<(Self, Vec<UserTOTP>)>, worker::Error> {
         let query = r#"
             select * from users
             where id = ?1
-            join user_devices
+            join users_totp
             using (id);
-        "#.trim();
+        "#
+        .trim();
 
         let mut encoded_id = SmallString::<IDENT_B64_CHARS>::new();
-        B64_ENCODER.encode_slice(&id, unsafe { encoded_id.as_bytes_mut() }).unwrap();
+        B64_ENCODER
+            .encode_slice(&id, unsafe { encoded_id.as_bytes_mut() })
+            .unwrap();
 
-        let results: D1Result = query_db::<&str>(
-            (query, &[JsValue::from_str(&*encoded_id)]),
-            env
-        ).await?;
+        let results: D1Result =
+            query_db::<&str>((query, &[JsValue::from_str(&*encoded_id)]), env).await?;
 
         #[allow(non_camel_case_types)]
         #[derive(Clone, Deserialize)]
@@ -206,12 +219,14 @@ impl User {
             devices.push(UserDevice {
                 device_number: row.d_devno,
                 is_independent: row.d_is_independent,
-                nickname: row.d_nickname
+                nickname: row.d_nickname,
             });
 
             if i == 0 {
                 let mut id = [0u8; IDENT_SIZE];
-                B64_ENCODER.decode_slice(row.u_id.as_bytes(), &mut id).unwrap();
+                B64_ENCODER
+                    .decode_slice(row.u_id.as_bytes(), &mut id)
+                    .unwrap();
 
                 user = User {
                     id,
@@ -219,7 +234,7 @@ impl User {
                     password_hash_phc: row.u_password_phc,
                     email: row.u_email,
                     phone_number_hash: row.u_phone_number,
-                    attachment_pubkey: row.u_attachment_pubkey
+                    attachment_pubkey: row.u_attachment_pubkey,
                 };
             }
 
