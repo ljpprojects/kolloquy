@@ -1,0 +1,17 @@
+[package]
+name = "kolloquy-crypto"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+worker = "0.8"
+base64 = "0.22"
+stack-string = "1.1.5"
+
+[dependencies.web-sys]
+version = "0.3"
+default-features = false
+features = ["Crypto", "Window", "SubtleCrypto", "CryptoKey"]

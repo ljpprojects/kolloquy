@@ -676,6 +676,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kolloquy-crypto"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "stack-string",
+ "web-sys",
+ "worker 0.8.3",
+]
+
+[[package]]
 name = "kolloquy-state"
 version = "0.1.0"
 dependencies = [
