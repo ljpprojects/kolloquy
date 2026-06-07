@@ -9,7 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 worker = "0.8"
 base64 = "0.22"
-stack-string = "1.1.5"
+stack-string = "1.1"
+kolloquy-consts = { path = "../kolloquy-consts" }
+phc = "0.6.1"
 
 [dependencies.web-sys]
 version = "0.3"
