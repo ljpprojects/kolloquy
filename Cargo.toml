@@ -7,6 +7,28 @@ authors = ["ljpprojects <owner@ljpprojects.org>"]
 [lib]
 crate-type = ["cdylib"]
 
+# mthreads is gone :)
+# like gone gone
+# like rm -rf gone
+# :|
+# $ ls ~/ | grep mthreads
+# $ echo "$?"
+#   1
+# gone
+# :|
+# ...
+# eh there is pthreads anyway
+# As for kolloquy
+# t h e r e
+# i s
+# S i g n a l
+# a n y w a y s
+# Well i'll be right back
+# $ rm -rf /Volumes/monster/kolloquy
+# $ ls /Volumes/monster/kolloquy
+#   ls: /Volumes/monster/kolloquy: No such file or directory
+
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
@@ -16,7 +38,7 @@ panic = "abort"
 
 [workspace]
 resolver = "3"
-members = ["kolloquy-crypto","kolloquy-state"]
+members = ["kolloquy-consts", "kolloquy-crypto", "kolloquy-state", "kolloquy-phash"]
 
 [dependencies.worker]
 version = "0.7"

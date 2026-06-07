@@ -190,7 +190,7 @@ impl User {
 
         #[allow(non_camel_case_types)]
         #[derive(Clone, Deserialize)]
-        struct _user_and_devices_row {
+        struct _user_and_totp_row {
             // From users
             pub u_id: SmallString<IDENT_B64_CHARS>,
             pub u_display_name: SmallString<18>,
@@ -199,10 +199,10 @@ impl User {
             pub u_phone_number: Option<SmallString<43>>,
             pub u_attachment_pubkey: SmallString<43>,
 
-            // From user_devices
-            pub d_devno: u8,
-            pub d_is_independent: bool,
-            pub d_nickname: SmallString<18>,
+            // From user_totp
+            pub t_wrapped_secret: [u8; 32],
+            pub t_interval: u8, //(15-45s, default 30s)
+            pub t_drift: u8, // How many intervals of drift we allow (default is 1, max is 90s total drift (so 2 45s intervals) or 3 intervals, whichever is smaller)
         }
 
         let results = results.results::<_user_and_devices_row>()?;

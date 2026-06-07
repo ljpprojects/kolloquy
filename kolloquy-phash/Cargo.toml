@@ -1,0 +1,28 @@
+[package]
+name = "kolloquy-phash"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+# Required
+kolloquy-consts = { path = "../kolloquy-consts" }
+zeroize = { version = "1.8.2", features = ["simd"] }
+argon2 = { version = "0.6.0-rc.8", features = ["zeroize", "parallel"] }
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "net"] }
+axum = { version = "0.8.9", features = ["http2", "macros"] }
+stack-string = "1.1.5"
+password-hash = "0.6.1"
+dotenvy = "0.15.7"
+base64 = "0.22.1"
+serde_json = "1.0.150"
+
+# logging feature
+tracing = { version = "0.1.44", optional = true }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing"], optional = true, default-features = false }
+secrecy = "0.10.3"
+
+[features]
+logging = ["dep:tracing", "dep:tracing-subscriber"] # Logging (which can be disabled at runtime also, but can be disabled in the binary to reduce size)
+default = ["logging"]

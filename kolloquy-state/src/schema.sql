@@ -156,7 +156,20 @@ create table users_totp(
 
     foreign key(id) references users(id)
         on delete cascade
-)
+);
+
+create table users_keyshare(
+    id text,
+    devno_wants_device0_auth integer,
+    auth_purpose text
+        check (text is null or text in ("attachment_privkey", "passlessauthweb_material")),
+    keyshare_fulfilled boolean,
+
+    primary key(devno_wants_device0_auth, id),
+
+    foreign key(id)
+        references users(id)
+);
 
 -- Chats are limited to 6 or less members, as every message is reencrypted for
 -- each recipient (using an ECDH keypair for each user)
@@ -194,6 +207,7 @@ create table chats_devices_keys(
     device_num integer not null,         -- The number designated for this device
     user_id text not null,               -- The ID of the user whose device it is
     chat_id text not null,               -- The ID of the chat they key is for
+    message_counter integer not null,    -- A counter that is incremented for every message sent
     send_allowed boolean not null,       -- Is this device allowed to send messages?
     public_key text not null unique,     -- The public key of the derived signing keypair (base64)
     derivation_salt text not null unique -- Salt to use for PKDF2 (32 bytes, base64)
