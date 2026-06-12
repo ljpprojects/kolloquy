@@ -12,16 +12,36 @@ argon2 = { version = "0.6.0-rc.8", features = ["zeroize", "parallel"] }
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "net"] }
 axum = { version = "0.8.9", features = ["http2", "macros"] }
+clap = { version = "4.6", features = ["derive"] }
+mimalloc = { version = "0.1.52", features = ["secure"] }
 stack-string = "1.1.5"
 password-hash = "0.6.1"
 dotenvy = "0.15.7"
 base64 = "0.22.1"
 serde_json = "1.0.150"
+keyring-core = "1.0.0"
+secrecy = "0.10.3"
+region = "3.0.2"
 
 # logging feature
 tracing = { version = "0.1.44", optional = true }
-tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing"], optional = true, default-features = false }
-secrecy = "0.10.3"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing"], optional = true }
+tower-http = { version = "0.6.11", features = ["trace"] }
+
+# What the fuck. Why are there so many dependencies
+# Oh I got a message from Hugh too this morning
+#
+# "did u die"
+#
+# Bro didnt even have the respect to type two extra letters 🥀
+#
+# I did NOT reply I am going to leave him guessing
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0.0", features = ["keychain"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linux-keyutils-keyring-store = "1.0.0"
 
 [features]
 logging = ["dep:tracing", "dep:tracing-subscriber"] # Logging (which can be disabled at runtime also, but can be disabled in the binary to reduce size)
