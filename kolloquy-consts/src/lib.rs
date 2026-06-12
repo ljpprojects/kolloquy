@@ -3,6 +3,8 @@
 pub const KOLLOQUY_VERSION: usize = 1;
 pub const KOLLOQUY_VERSION_STR: &str = "1";
 
+pub const KOLLOQUY_SERVICE_STR: &str = "com.kolloquy";
+
 // Secret binding names
 pub const PHASH_MTLS_SECRET_NAME: &str = "PHASH_MTLS";
 

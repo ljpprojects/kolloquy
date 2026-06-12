@@ -7,34 +7,35 @@ authors = ["ljpprojects <owner@ljpprojects.org>"]
 [lib]
 crate-type = ["cdylib"]
 
-# mthreads is gone :)
-# like gone gone
-# like rm -rf gone
-# :|
-# $ ls ~/ | grep mthreads
-# $ echo "$?"
-#   1
-# gone
-# :|
-# ...
-# eh there is pthreads anyway
-# As for kolloquy
-# t h e r e
-# i s
-# S i g n a l
-# a n y w a y s
-# Well i'll be right back
-# $ rm -rf /Volumes/monster/kolloquy
-# $ ls /Volumes/monster/kolloquy
-#   ls: /Volumes/monster/kolloquy: No such file or directory
-
+# No but really Kolloquy is heading the same way
+# Even when they were available to use
+# They went nowhere
+# And its the same with lmnopGAME
+# It might even be an actively harmful
+#
+# Hell
+# Why even renew my domains next year
+# Its not like anyone visits them
+# Its a waste of $30 a year
+# I will start a challenge
+# Take down my whole website fully
+# Until either the domain registration expires
+# Or someone notices
+# And the same with Kolloquy, Mosaic, and lmnopGAME
+# Full cessation of development until someone notices (they literally cant because I have been pouring years of efforts into a void)
+# Okay maybe not lmnopGAME
+# I am dependent on that
+# The things I'd do without it...
+# The things I'd have done without it...
+# But everything else dies
 
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = "z"
-strip = true
+opt-level = 3
 panic = "abort"
+debug = "none"
+strip = true
 
 [workspace]
 resolver = "3"

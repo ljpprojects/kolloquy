@@ -1,2 +1,12 @@
 [build]
-target = "aarch64-unknown-linux-gnu" # Specifically the architecture that I self-host this server on
+target = "aarch64-unknown-linux-musl" # This is the default target as 1) I personally host this on an aarch64 linux device and 2) we end up with a fully self-contained binary, at the cost of needing to recompile for library updates or security patches
+
+# Only here because I need to cross-compile
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-musl-gcc"
+ar = "aarch64-linux-musl-ar"
+
+[target.aarch64-unknown-linux-musl.env]
+CC = "aarch64-linux-musl-gcc"
+CXX = "aarch64-linux-musl-g++"

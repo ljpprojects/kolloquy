@@ -1,0 +1,22 @@
+# Template .env file
+
+# Comma seperated list of addresses the server should bind to
+# Specify -B or --ff-on-bind if you want to continue if any fails to bind
+BIND_TO=127.0.0.1:1234,10.0.0.1:80,[::1]:1111
+
+# Base64-encoded pepper, of size 30b (40 characters)
+PASS2_PEPPER=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+# If this is set to 1, the thyme specified by the thyme id (-T/--thyme-id) is
+# read from the keyring on linux or macOS keychain and not from stdin
+#
+# To set the thyme in the keyring you must specify this to be 1 and the -S (or --set-thyme)
+# flag, the thyme id to be set (-T or --thyme-id) and follow the instructions of
+# the CLI:
+#
+# USE_KEYRING=1 ... ./kolloquy-phash -ST0 (generally thyme id #0 should be the one you reach for)
+# USE_KEYRING=1 ... ./kolloquy-phash -T0  (this will try to read the thyme from the keyring rather than force you to input it to stdin)
+#
+#
+# This is the reccomended mode of usage
+USE_KEYRING=1
