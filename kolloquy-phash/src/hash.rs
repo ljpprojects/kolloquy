@@ -1,12 +1,18 @@
-use std::{env, sync::Arc};
 use crate::{PASS2_PEPPER_SIZE, PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE, ServerState};
-use argon2::{Algorithm, Argon2, AssociatedData, KeyId, ParamsBuilder, PasswordHash, PasswordHasher, Version};
+use argon2::{
+    Algorithm, Argon2, AssociatedData, KeyId, ParamsBuilder, PasswordHash, PasswordHasher, Version,
+};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use kolloquy_consts::{PASS1_DIGEST_SIZE, PASS2_DIGEST_SIZE, PASS2_MAGIC_DATA, PASS2_SALT_SIZE};
 use secrecy::ExposeSecret;
+use std::{env, sync::Arc};
 use zeroize::Zeroizing;
 
-pub fn compute_stage_2_digest(digest_1: [u8; PASS1_DIGEST_SIZE], salt_2: [u8; PASS2_SALT_SIZE], state: Arc<ServerState>) -> PasswordHash {
+pub fn compute_stage_2_digest(
+    digest_1: [u8; PASS1_DIGEST_SIZE],
+    salt_2: [u8; PASS2_SALT_SIZE],
+    state: Arc<ServerState>,
+) -> PasswordHash {
     let mut out = [0u8; PASS2_DIGEST_SIZE];
 
     let assoc_data = AssociatedData::new(&PASS2_MAGIC_DATA).unwrap();
