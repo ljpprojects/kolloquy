@@ -3,6 +3,13 @@ name = "kolloquy-phash"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "kolloquy_phash"
+crate-type = ["dylib", "staticlib"]
+
+[[bin]]
+name = "kolloquy-phash"
+
 [dependencies]
 
 # Required

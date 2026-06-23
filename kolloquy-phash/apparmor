@@ -1,0 +1,16 @@
+abi <abi/4.0>
+
+include <tunables/global>
+
+profile kolloquy-phash /usr/local/bin/kolloquy-phash /home/klqy/ubin/kolloquy-phash flags=(attach_disconnected) {
+    include <abstractions/base>
+
+    # Read dotfile
+    ./.env r,
+
+    #### Network capabiltiies ####
+
+    capability net_bind_service,
+    network inet stream,
+    network inet6 stream,
+}

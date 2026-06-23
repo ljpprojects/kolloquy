@@ -1,16 +1,19 @@
-use kolloquy_consts::{KOLLOQUY_SERVICE_STR};
+use kolloquy_consts::KOLLOQUY_SERVICE_STR;
 use zeroize::Zeroizing;
 
-use crate::{PASS2_THYME_SIZE};
+use crate::PASS2_THYME_SIZE;
 
-pub fn get_thyme_from_keyring(id: usize) -> Option<Zeroizing<[u8; PASS2_THYME_SIZE]>> {
-    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme@{id}")) {
+pub fn get_thyme_from_keyring(
+    id: usize,
+) -> Result<Zeroizing<[u8; PASS2_THYME_SIZE]>, keyring_core::Error> {
+    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme.{id}"))
+    {
         Ok(e) => e,
         Err(e) => {
             #[cfg(feature = "logging")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
-            return None
+            return Err(e);
         }
     };
 
@@ -20,41 +23,45 @@ pub fn get_thyme_from_keyring(id: usize) -> Option<Zeroizing<[u8; PASS2_THYME_SI
             #[cfg(feature = "logging")]
             tracing::error!(name: "Could not get thyme from keyring", ?e);
 
-            return None
+            return Err(e);
         }
     };
 
     let mut secret = [0u8; PASS2_THYME_SIZE];
 
     if bytes.len() < PASS2_THYME_SIZE {
-        return None
+        panic!("The thyme in the keyring isn't large enough????");
     }
 
     secret.copy_from_slice(&bytes);
 
-    Some(Zeroizing::new(secret))
+    Ok(Zeroizing::new(secret))
 }
 
 /// Puts the thyme to the native keyring
 /// This should be run if USE_KEYRING is 1 and the `--set-thyme` flag is passed
-pub fn put_thyme_to_keyring(thyme: &[u8; PASS2_THYME_SIZE], id: usize) -> Option<()> {
-    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme@{id}")) {
+pub fn put_thyme_to_keyring(
+    thyme: &[u8; PASS2_THYME_SIZE],
+    id: usize,
+) -> Result<(), keyring_core::Error> {
+    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme@{id}"))
+    {
         Ok(e) => e,
         Err(e) => {
             #[cfg(feature = "logging")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
-            return None
+            return Err(e);
         }
     };
 
     match entry.set_secret(thyme) {
-        Ok(e) => Some(()),
+        Ok(_) => Ok(()),
         Err(e) => {
             #[cfg(feature = "logging")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
-            None
+            Err(e)
         }
     }
 }
