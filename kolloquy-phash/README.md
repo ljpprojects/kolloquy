@@ -4,35 +4,28 @@ This is the server which Kolloquy uses to compute password hashes.
 
 ## Tested Targets
 
-### `aarch64-apple-darwin`
-
-Keyring set/get & demo case for hashing work as intended.
-
-### `aarch64-unknown-linux-gnu` & `aarch64-unknown-linux-musl` (the big ones)
-
-Keyring set/get & demo case for hashing work as intended.
-
-Again, the hashing is the same speed as on my x86-64 linux machine, which says
-something about the macbook, as even a raspberry pi 5 is beating it...
-Setting it up was such a pain holy shit
-I did not give the rootfs enough space...
-
-```
-$ df -h
-Filesystem        Size  Used Avail Use% Mounted on
-/dev/sda2         3.9G  3.2G  507M  87% /
-/dev/sda1        1022M   66M  957M   7% /boot
-/dev/mapper/home   20G  2.8G   16G  15% /home
-```
-
-### `x86_64-unknown-linux-gnu` & `x86_64-unknown-linux-musl`
-
-Keyring set/get & demo case for hashing work as intended.
-
-Also holy shit why is that so GOOD at computing the hashes???
-Like it just straight up crunched through them in not even 300ms for musl and gnu
-Even the macbook I tested aarch64-apple-darwin on took like 2.5s each
-
-### Windows? Are you fucking insane???
+- `aarch64-apple-darwin`
 
 ## Recommended Setup
+
+There should be a separate user for running the Kolloquy PHash server, named
+`klqy`. The provided nginx config expects this. The `kolloquy-phash` binary
+should be executed as this user, with the cwd set to `/home/klqy`.
+
+The layout of the `klqy` user's home directory should look like this (assuming
+all files and directories are owned by `klqy` unless specified otherwise):
+
+```
+/home/klqy          (0700)
+├── .env            (SECRET config file, 0400, can't even trust ourselves with it)
+├── kolloquy-phash  (The PHash server binary, should NOT be a link under the default apparmor rules, 4500)
+└── phash           (0600)
+    ├── mtls.crt    (Certificate for MTLS keypair, PEM format, 0400)
+    ├── mtls.key    (Private key of the MTLS keypair, PEM format, 0400)
+    ├── mtls-ca.crt (Certificate for the CA keypair used to create the MTLS keypair, 0400)
+    ├── ssl.crt     (Certificate for the SSL keypair, PEM format, 0400)
+    └── ssl.key     (Private key of the SSL keypair, PEM format, 0400)
+└── cache           (Directory to use for cache, 0600)
+```
+
+(Technically anything more restrctive than `0700` doesn't really matter)

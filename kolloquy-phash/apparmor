@@ -1,12 +1,36 @@
+# This is fully untested, do NOT use this yet
+
 abi <abi/4.0>
 
 include <tunables/global>
 
-profile kolloquy-phash /usr/local/bin/kolloquy-phash /home/klqy/ubin/kolloquy-phash flags=(attach_disconnected) {
+profile kolloquy-phash /home/klqy/kolloquy-phash flags=(attach_disconnected) {
     include <abstractions/base>
 
-    # Read dotfile
-    ./.env r,
+    # /home/klqy          (0700)
+    # ├── .env            (0400)
+    # ├── kolloquy-phash  (4500)
+    # └── phash           (0600)
+    #     ├── mtls.crt    (0400)
+    #     ├── mtls.key    (0400)
+    #     ├── mtls-ca.crt (0400)
+    #     ├── ssl.crt     (0400)
+    #     └── ssl.key     (0400)
+    # └── cache           (0600)
+    #
+    #### Read/write to files and directories as needed by the file tree above ####
+
+    /home/klqy/.env r,
+
+    /home/klqy/phash/mtls.crt r,
+    /home/klqy/phash/mtls.key r,
+    /home/klqy/phash/mtls-ca.crt r,
+
+    /home/klqy/phash/ssl.crt r,
+    /home/klqy/phash/ssl.key r,
+
+    /home/klqy/cache/ rw,
+    /home/klqy/cache/** rw,
 
     #### Network capabiltiies ####
 

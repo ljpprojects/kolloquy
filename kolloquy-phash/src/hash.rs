@@ -1,4 +1,4 @@
-use crate::{PASS2_PEPPER_SIZE, PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE, ServerState};
+use crate::{consts::{PASS2_PEPPER_SIZE, PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE}, ServerState};
 use argon2::{
     Algorithm, Argon2, AssociatedData, KeyId, ParamsBuilder, PasswordHash, PasswordHasher, Version,
 };

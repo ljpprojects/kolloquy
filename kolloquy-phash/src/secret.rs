@@ -10,7 +10,7 @@ pub fn get_thyme_from_keyring(
     {
         Ok(e) => e,
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
             return Err(e);
@@ -20,7 +20,7 @@ pub fn get_thyme_from_keyring(
     let bytes = match entry.get_secret() {
         Ok(s) => s,
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!(name: "Could not get thyme from keyring", ?e);
 
             return Err(e);
@@ -44,11 +44,11 @@ pub fn put_thyme_to_keyring(
     thyme: &[u8; PASS2_THYME_SIZE],
     id: usize,
 ) -> Result<(), keyring_core::Error> {
-    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme@{id}"))
+    let entry = match keyring_core::Entry::new(KOLLOQUY_SERVICE_STR, &*format!("phash:thyme.{id}"))
     {
         Ok(e) => e,
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
             return Err(e);
@@ -58,7 +58,7 @@ pub fn put_thyme_to_keyring(
     match entry.set_secret(thyme) {
         Ok(_) => Ok(()),
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!(name: "Could not add thyme to keyring", ?e);
 
             Err(e)

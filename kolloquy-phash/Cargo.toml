@@ -14,7 +14,7 @@ name = "kolloquy-phash"
 
 # Required
 kolloquy-consts = { path = "../kolloquy-consts" }
-zeroize = { version = "1.8.2", features = ["simd"] }
+zeroize = { version = "1.9.0", features = ["simd"] }
 argon2 = { version = "0.6.0-rc.8", features = ["zeroize", "parallel"] }
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "net"] }
@@ -33,7 +33,7 @@ region = "3.0.2"
 # logging feature
 tracing = { version = "0.1.44", optional = true }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing"], optional = true }
-tower-http = { version = "0.6.11", features = ["trace"] }
+tower-http = { version = "0.7.0", features = ["trace"] }
 
 # What the fuck. Why are there so many dependencies
 # Oh I got a message from Hugh too this morning
@@ -51,5 +51,5 @@ apple-native-keyring-store = { version = "1.0.0", features = ["keychain"] }
 linux-keyutils-keyring-store = "1.0.0"
 
 [features]
-logging = ["dep:tracing", "dep:tracing-subscriber"] # Logging (which can be disabled at runtime also, but can be disabled in the binary to reduce size)
-default = ["logging"]
+tracing = ["dep:tracing", "dep:tracing-subscriber"] # Logging (which can be disabled at runtime also, but can be disabled in the binary to reduce size)
+default = ["tracing"]
