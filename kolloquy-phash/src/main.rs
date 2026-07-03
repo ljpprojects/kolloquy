@@ -848,10 +848,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         Ok(page) => page,
         Err(e) => {
             #[cfg(feature = "tracing")]
-            tracing::error!("Could not mprotect memory of the thyme; aborting.");
+            tracing::error!("Could not mlock memory of the thyme; aborting.");
 
             #[cfg(not(feature = "tracing"))]
-            eprintln!("Could not mprotect memory of the thyme; aborting.");
+            eprintln!("Could not mlock memory of the thyme; aborting.");
 
             return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
         }
@@ -864,10 +864,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         Ok(page) => page,
         Err(e) => {
             #[cfg(feature = "tracing")]
-            tracing::error!("Could not mprotect memory of the thyme; aborting.");
+            tracing::error!("Could not mlock memory of the thyme; aborting.");
 
             #[cfg(not(feature = "tracing"))]
-            eprintln!("Could not mprotect memory of the thyme; aborting.");
+            eprintln!("Could not mlock memory of the thyme; aborting.");
 
             return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
         }
