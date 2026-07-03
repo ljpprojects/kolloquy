@@ -1,0 +1,8 @@
+s8e2.mp4
+swoon.mp4
+urls.txt
+apache2
+
+# Since the kolloquy-phash crate is a binary crate, you can use the .lock file
+# for reproducible builds
+!Cargo.lock

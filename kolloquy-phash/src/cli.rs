@@ -11,4 +11,8 @@ pub struct Arguments {
     /// Do not exit if an address fails to bind
     #[arg(short = 'B', long = "ff-on-bind", default_value = "false")]
     pub fail_forward_on_bind: bool,
+
+    /// Skip checking for required files and directories, and skip checking their permissions. You should set this if you do not plan to use the default nginx config provided.
+    #[arg(long = "no-filecheck", default_value = "false")]
+    pub skip_filecheck: bool,
 }

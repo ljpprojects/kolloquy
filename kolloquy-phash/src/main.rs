@@ -1,4 +1,4 @@
-// Not working; need to fix error handling
+// Working?
 
 #![feature(const_ops)]
 #![feature(const_trait_impl)]
@@ -11,7 +11,7 @@ pub mod hash;
 pub mod secret;
 pub mod consts;
 
-#[cfg(feature = "logging")]
+#[cfg(feature = "tracing")]
 use {
     axum::http::Request,
     std::time::Duration,
@@ -22,7 +22,7 @@ use {
 };
 
 use crate::{
-    cli::Arguments, consts::PASS2_PEPPER_VAR_NAME, hash::compute_stage_2_digest, secret::{get_thyme_from_keyring, put_thyme_to_keyring}
+    cli::Arguments, consts::{PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE}, hash::compute_stage_2_digest, secret::{get_thyme_from_keyring, put_thyme_to_keyring}
 };
 
 use axum::{
@@ -52,12 +52,7 @@ use stack_string::SmallString;
 use zeroize::{Zeroize, Zeroizing};
 
 use std::{
-    env,
-    io::{self, Error, Read},
-    num::IntErrorKind::Zero,
-    ops::Mul,
-    process::ExitCode,
-    sync::Arc,
+    env, fs::File, io::{self, Error, Read}, num::IntErrorKind::Zero, ops::Mul, os::unix::fs::PermissionsExt, path::PathBuf, process::{ExitCode, exit}, sync::Arc,
 };
 
 use tokio::{
@@ -101,14 +96,14 @@ async fn handle_phash_req(
     headers: HeaderMap,
     Json(body): Json<PHashRequest>,
 ) -> Response<String> {
-    use crate::errcodes::{INVALID_DIGEST, INVALID_DIGEST_SIZE, INVALID_SALT_SIZE, INVALID_SALT, NO_VERSION_SPECIFIED, VERSION_MISMATCH};
+    use crate::consts::errcodes::{INVALID_DIGEST, INVALID_DIGEST_SIZE, INVALID_SALT_SIZE, INVALID_SALT, NO_VERSION_SPECIFIED, VERSION_MISMATCH};
 
-    #[cfg(feature = "logging")]
+    #[cfg(feature = "tracing")]
     tracing::info!("PHash request reached backend");
 
     let Some(version) = headers.get("X-Kolloquy-Server-Version") else {
-        #[cfg(feature = "logging")]
-        tracing::debug!("Requesting server did not specify the version it is running.");
+        #[cfg(feature = "tracing")]
+        tracing::error!("Requesting server did not specify the version it is running.");
 
         let mut err = Response::new(format!(
             "{NO_VERSION_SPECIFIED}: X-Kolloquy-Server-Version header is required"
@@ -130,8 +125,8 @@ async fn handle_phash_req(
     };
 
     if version.to_str().unwrap() != KOLLOQUY_VERSION_STR {
-        #[cfg(feature = "logging")]
-        tracing::debug!(
+        #[cfg(feature = "tracing")]
+        tracing::error!(
             "Version of requesting server does not match the version of the PHash server."
         );
 
@@ -276,16 +271,16 @@ async fn handle_phash_req(
         },
     };
 
-    #[cfg(feature = "logging")]
+    #[cfg(feature = "tracing")]
     let start = {
-        tracing::debug!("Computing digest...");
+        tracing::info!("Computing digest...");
         Instant::now()
     };
 
     let phc = compute_stage_2_digest(digest_1, salt_2, state);
 
-    #[cfg(feature = "logging")]
-    tracing::debug!("Computed digest after {:?}", start.elapsed());
+    #[cfg(feature = "tracing")]
+    tracing::info!("Computed digest after {:?}", start.elapsed());
 
     let mut res = Response::new(phc.to_string());
 
@@ -302,7 +297,7 @@ async fn handle_phash_req(
     res
 }
 
-#[cfg(feature = "logging")]
+#[cfg(feature = "tracing")]
 fn router(secret_thyme: Arc<Zeroizing<[u8; PASS2_THYME_SIZE]>>) -> Router {
     Router::new()
         .route("/{digest}", post(handle_phash_req))
@@ -333,7 +328,7 @@ fn router(secret_thyme: Arc<Zeroizing<[u8; PASS2_THYME_SIZE]>>) -> Router {
         )
 }
 
-#[cfg(not(feature = "logging"))]
+#[cfg(not(feature = "tracing"))]
 fn router(secret_thyme: Arc<Zeroizing<[u8; PASS2_THYME_SIZE]>>) -> Router {
     Router::new()
         .route("/", post(handle_phash_req))
@@ -342,76 +337,242 @@ fn router(secret_thyme: Arc<Zeroizing<[u8; PASS2_THYME_SIZE]>>) -> Router {
         }))
 }
 
-cfg_select! {
-    feature = "logging" => {
-        /// Checks if all required environment variables are set.
-        ///
-        /// Also runs dotenvy::dotenv
-        fn envcheck() -> bool {
-            dotenvy::dotenv();
+/// Checks if all required environment variables are set, if cwd is
+/// equal to the directory specified by EXPECT_CWD or /home/klqy
+/// (canonicalised).
+///
+/// Also runs dotenvy::dotenv, ignoring any errors emitted by it.
+#[cfg(feature = "tracing")]
+fn envcheck() -> Result<bool, std::io::Error> {
+    dotenvy::dotenv_override();
 
-            if env::var(PASS2_PEPPER_VAR_NAME).is_err() {
-                tracing::error!(
-                    target: "envcheck",
-                    name: "required_env_var_missing",
-                    "The {PASS2_PEPPER_VAR_NAME} environment variable is required (try including it in your .env file)"
-                );
+    let expected_cwd = env::var("EXPECT_CWD").unwrap_or("/home/klqy".to_string());
+    let expected_cwd = PathBuf::from(expected_cwd);
 
-                false
-            } else if env::var("BIND_TO").is_err() {
-                tracing::error!(
-                    target: "envcheck",
-                    name: "required_env_var_missing",
-                    "The BIND_TO environment variable is required (try including it in the command invocation, e.g. BIND_TO=127.0.0.1:8080,[::1]:8080 kolloquy-phash ...)."
-                );
+    let expected_cwd = match expected_cwd.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            // Apparently the target was being filtered out...
+            tracing::error!(
+                name: "invalid_ewd",
+                target: "envcheck",
+                "The expected working directory ({expected_cwd:?}) is not readable.",
+            );
 
-                false
-            } else {
-                true
-            }
+            return Err(e);
         }
+    };
+
+    let cwd = match env::current_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(
+                name: "invalid_cwd",
+                target: "envcheck",
+                ?e,
+                "The current working directory is unreadable?? THATS THE FUCKING BARE MINIMUM",
+            );
+
+            return Err(e);
+        }
+    };
+
+    if expected_cwd != cwd {
+        tracing::error!(
+            name: "invalid_cwd",
+            target: "envcheck",
+            "The current working directory ({cwd:?}) does not match the expected cwd ({expected_cwd:?})",
+        );
+
+        // Just exit
+        panic!("envcheck failed")
     }
-    _ => {
-        /// Checks if all required environment variables are set.
-        ///
-        /// Also runs dotenvy::dotenv
-        fn envcheck() -> bool {
-            dotenvy::dotenv();
 
-            if env::var(PASS2_PEPPER_VAR_NAME).is_err() {
+    if env::var(PASS2_PEPPER_VAR_NAME).is_err() {
+        tracing::error!(
+            name: "required_env_var_missing",
+            target: "envcheck",
+            "The {PASS2_PEPPER_VAR_NAME} environment variable is required (try including it in your .env file)"
+        );
+
+        Ok(false)
+    } else if env::var("BIND_TO").is_err() {
+        tracing::error!(
+            name: "required_env_var_missing",
+            target: "envcheck",
+            "The BIND_TO environment variable is required (try including it in the command invocation, e.g. BIND_TO=127.173.197.139:7399,[::1]:8080 kolloquy-phash ...)."
+        );
+
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
+#[cfg(not(feature = "tracing"))]
+/// Checks if all required environment variables are set, if cwd is
+/// equal to the directory specified by EXPECT_CWD or /home/klqy
+/// (canonicalised and normalised).
+///
+/// Also runs dotenvy::dotenv, ignoring any errors emitted by it.
+fn envcheck() -> Result<bool, std::io::Error> {
+    dotenvy::dotenv_override();
+
+    let expected_cwd = env::var("EXPECT_CWD").unwrap_or("/home/klqy".to_string());
+    let expected_cwd = PathBuf::from(expected_cwd);
+    let expected_cwd = match expected_cwd.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!(
+                "The current working directory ({}) is not valid???? {e}",
+            );
+
+            return Err(e);
+        }
+    };
+
+    let cwd = match env::current_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!(
+                "The current working directory is unreadable?? THATS THE FUCKING BARE MINIMUM: {e}",
+            );
+
+            return Err(e);
+        }
+    };
+
+    if expected_cwd != cwd {
+        eprintln!(
+            "The current working directory ({cwd:?}) does not match the expected cwd ({expected_cwd:?})",
+        );
+
+        // Just exit
+        panic!("envcheck failed")
+    };
+
+    if env::var(PASS2_PEPPER_VAR_NAME).is_err() {
+        eprintln!(
+            "The {PASS2_PEPPER_VAR_NAME} environment variable is required (try including it in your .env file)"
+        );
+
+        Ok(false)
+    } else if env::var("BIND_TO").is_err() {
+        eprintln!(
+            "The BIND_TO environment variable is required (try including it in the command invocation, e.g. BIND_TO=127.173.197.139:7399,[::1]:8080 kolloquy-phash ...)."
+        );
+
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
+/// Check required files and directories are present at the moment the function
+/// is run, and if their permissions are correct. Panics if any aren't.
+///
+/// envcheck should have been run already.
+///
+/// This can be disabled by setting --no-filecheck
+fn filecheck() {
+    let required_files = [
+        (env::current_exe().unwrap(), 0o4500),
+
+        (PathBuf::from("./phash/mtls.crt"), 0o400),
+        (PathBuf::from("./phash/mtls.key"), 0o400),
+        (PathBuf::from("./phash/mtls-ca.crt"), 0o400),
+
+        (PathBuf::from("./phash/ssl.crt"), 0o400),
+        (PathBuf::from("./phash/ssl.key"), 0o400),
+
+        (PathBuf::from("./cache"), 0o600), // Technically a directory but doesn't change how we check
+    ];
+
+    for (path, expected_perms) in required_files {
+        if !path.exists() {
+            #[cfg(feature = "tracing")]
+            tracing::error!(
+                name: "required_file_missing",
+                target: "filecheck",
+                "The {path:?} file must exist to continue running kolloquy-phash."
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            eprintln!(
+                "The {path:?} file must exist to continue running kolloquy-phash."
+            );
+
+            panic!("Required file {path:?} is not present.")
+        }
+
+        let file = match File::open(path.clone()) {
+            Ok(f) => f,
+            Err(e) => {
+                #[cfg(feature = "tracing")]
+                tracing::error!(
+                    name: "required_file_unreadable",
+                    target: "filecheck",
+                    "The {path:?} file could not be opened."
+                );
+
+                #[cfg(not(feature = "tracing"))]
                 eprintln!(
-                    "The {PASS2_PEPPER_VAR_NAME} environment variable is required (try including it in your .env file)"
+                    "The {path:?} file could not be opened."
                 );
 
-                false
-            } else if env::var("BIND_TO").is_err() {
-                tracing::eprintln!(
-                    "The BIND_TO environment variable is required (try including it in the command invocation, e.g. BIND_TO=127.0.0.1:8080,[::1]:8080 kolloquy-phash ...)."
-                );
-
-                false
-            } else {
-                true
+                panic!("Required file {path:?} is not readable.")
             }
+        };
+
+        let perms = match file.metadata() {
+            Ok(m) => m.permissions(),
+            Err(e) => {
+                #[cfg(feature = "tracing")]
+                tracing::error!(
+                    name: "required_file_unreadable",
+                    target: "filecheck",
+                    "The {file:?} file could not be opened."
+                );
+
+                #[cfg(not(feature = "tracing"))]
+                eprintln!(
+                    "The {file:?} file could not be opened."
+                );
+
+                panic!("Required file {file:?} is not readable.")
+            }
+        };
+
+        let perms: u32 = perms.mode()  & 0o7777;
+
+        if perms != expected_perms {
+            #[cfg(feature = "tracing")]
+            tracing::error!(
+                name: "required_file_unreadable",
+                target: "filecheck",
+                "The {file:?} file's permissions of {perms:o} do not match the expected permission of {expected_perms:o}."
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            eprintln!(
+                "The {file:?} file's permissions of {perms:o} do not match the expected permission of {expected_perms:o}."
+            );
+
+            panic!("Required file {file:?} is not readable.")
         }
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
-    if !envcheck() {
-        // envcheck handles logging, we just need to exit
-        return Err(None)
-    }
-
     let args = Arguments::parse();
 
-    #[cfg(feature = "logging")]
+    #[cfg(feature = "tracing")]
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                 format!(
-                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    "{}=info,tower_http=debug,axum::rejection=trace,envcheck=info,get_thyme=info,filecheck=info,permcheck=info", // Apparently the target was being filtered out...
                     env!("CARGO_CRATE_NAME")
                 )
                 .into()
@@ -419,6 +580,30 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    // So many arguments...
+    //
+    // kolloquy-phash --help
+    // Usage: kolloquy-phash [OPTIONS]
+    //
+    // Options:
+    //   -S, --set-thyme            Overwrite the thyme indicated by --thyme-id. Persists indefinitely on macOS and until reboot on Linux
+    //   -T, --thyme-id <THYME_ID>  ID of the thyme to use for this server
+    //   -B, --ff-on-bind           Do not exit if an address fails to bind
+    //       --no-filecheck         Skip checking for required files and directories, and skip checking their permissions. You should set this if you do not plan to use the default nginx config provided
+    //   -h, --help                 Print help
+
+    match envcheck() {
+        Ok(res) if !res => return Err(None), // envcheck handled logging
+        Ok(_) => (),
+        Err(e) => {
+            return Err(Some(Box::new(e) as Box<dyn std::error::Error>))
+        }
+    };
+
+    if !args.skip_filecheck {
+        filecheck();
+    }
 
     // Should we try to load the thyme from the keyring (or should we try to set
     // it if we later find -S is set)
@@ -428,10 +613,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     let thyme_id = match args.thyme_id {
         Some(i) => Some(i),
         None if use_keyring => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!(name: "required_arg_missing", "The `--thyme-id N` (`-T N`) argument is required if USE_KEYRING is enabled.");
 
-            #[cfg(not(feature = "logging"))]
+            #[cfg(not(feature = "tracing"))]
             eprintln!(
                 "The `--thyme-id N` (`-T N`) argument is required if USE_KEYRING is enabled."
             );
@@ -472,46 +657,46 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
             Ok(t) => t,
             Err(e) => match e {
                 KeyringError::NoEntry => {
-                    #[cfg(all(feature = "logging", target_os = "linux"))]
-                    tracing::error!(name: "no_thyme_entry", "No entry exists for thyme {} (the entries do not persist across reboots, it has to be set again).", thyme_id.unwrap());
+                    #[cfg(all(feature = "tracing", target_os = "linux"))]
+                    tracing::error!(name: "no_thyme_entry", target: "get_thyme", "No entry exists for thyme {} (the entries do not persist across reboots, it has to be set again).", thyme_id.unwrap());
 
-                    #[cfg(all(feature = "logging", not(target_os = "linux")))]
-                    tracing::error!(name: "no_thyme_entry", "No entry exists for thyme {}.", thyme_id.unwrap());
+                    #[cfg(all(feature = "tracing", not(target_os = "linux")))]
+                    tracing::error!(name: "no_thyme_entry", target: "get_thyme", "No entry exists for thyme {}.", thyme_id.unwrap());
 
-                    #[cfg(all(not(feature = "logging"), target_os = "linux"))]
+                    #[cfg(all(not(feature = "tracing"), target_os = "linux"))]
                     eprintln!(
                         "No entry exists for thyme {} (the entries do not persist across reboots, it has to be set again).",
                         thyme_id.unwrap()
                     );
 
-                    #[cfg(all(not(feature = "logging"), not(target_os = "linux")))]
+                    #[cfg(all(not(feature = "tracing"), not(target_os = "linux")))]
                     eprintln!("No entry exists for thyme {}.", thyme_id.unwrap());
 
-                    return Error(Some(Box::new(e)));
+                    return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
                 }
                 KeyringError::NoStorageAccess(pe) => {
-                    #[cfg(feature = "logging")]
-                    tracing::error!(?pe, name: "thyme_unaccessible", "The entry for thyme {} cannot be accessed.", thyme_id.unwrap());
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(name: "thyme_unaccessible", target: "get_thyme", ?pe, "The entry for thyme {} cannot be accessed.", thyme_id.unwrap());
 
-                    #[cfg(not(feature = "logging"))]
+                    #[cfg(not(feature = "tracing"))]
                     eprintln!(
                         "The entry for thyme {} cannot be accessed: {pe}",
                         thyme_id.unwrap()
                     );
 
-                    return Error(Some(pe));
+                    return Err(Some(pe as Box<dyn std::error::Error>));
                 }
                 e => {
-                    #[cfg(feature = "logging")]
-                    tracing::error!(?e, name: "thyme_read_failure", "An error occurred while reading the entry for thyme {}.", thyme_id.unwrap());
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(name: "thyme_read_failure", target: "get_thyme", ?e, "An error occurred while reading the entry for thyme {}.", thyme_id.unwrap());
 
-                    #[cfg(not(feature = "logging"))]
+                    #[cfg(not(feature = "tracing"))]
                     eprintln!(
                         "An error occurred while reading the entry for thyme {}: {e}",
                         thyme_id.unwrap()
                     );
 
-                    return Error(Some(Box::new(e)));
+                    return Err(Some(Box::new(e)));
                 }
             },
         }
@@ -554,41 +739,32 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
                     let mut b64_thyme = Zeroizing::new([0u8; PASS2_THYME_SIZE.mul(8).div_ceil(6)]);
                     io::stdin().read_exact(&mut *b64_thyme);
 
-                    #[cfg(target_pointer_width = "7")]
-                    compile_error!("Why do I feel nothing?");
-
-                    #[cfg(target_pointer_width = "307")]
-                    compile_error!("Even the though of H I M doesn't conjure emotion");
-
-                    #[cfg(target_pointer_width = "29387")]
-                    compile_error!("Not even anger, or disgust, or hurt; nothing");
-
                     let mut t = Zeroizing::new([0u8; PASS2_THYME_SIZE]);
                     STANDARD.decode_slice(&b64_thyme, &mut *t);
 
                     t
                 };
 
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "tracing")]
                 tracing::info!("Setting thyme in keyring...");
 
-                #[cfg(not(feature = "logging"))]
+                #[cfg(not(feature = "tracing"))]
                 eprintln!("Setting thyme in keyring...");
 
-                if let None = put_thyme_to_keyring(&thyme, thyme_id) {
-                    #[cfg(feature = "logging")]
-                    tracing::error!("Failed to set thyme in keyring.");
+                if let Err(e) = put_thyme_to_keyring(&thyme, thyme_id) {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("Failed to set thyme in keyring: {e}.");
 
-                    #[cfg(not(feature = "logging"))]
-                    eprintln!("Failed to set thyme in keyring.");
+                    #[cfg(not(feature = "tracing"))]
+                    eprintln!("Failed to set thyme in keyring: {e}.");
 
-                    return Err(None);
+                    return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
                 };
 
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "tracing")]
                 tracing::info!("The thyme was stored in the keyring successfully.");
 
-                #[cfg(not(feature = "logging"))]
+                #[cfg(not(feature = "tracing"))]
                 eprintln!("The thyme was stored in the keyring successfully.");
 
                 thyme
@@ -671,10 +847,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     let _guard_1 = match region::lock(&raw const thyme, PASS2_THYME_SIZE) {
         Ok(page) => page,
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!("Could not mprotect memory of the thyme; aborting.");
 
-            #[cfg(not(feature = "logging"))]
+            #[cfg(not(feature = "tracing"))]
             eprintln!("Could not mprotect memory of the thyme; aborting.");
 
             return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
@@ -687,10 +863,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     let _guard_2 = match region::lock(thyme_heap.as_ptr(), PASS2_THYME_SIZE) {
         Ok(page) => page,
         Err(e) => {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "tracing")]
             tracing::error!("Could not mprotect memory of the thyme; aborting.");
 
-            #[cfg(not(feature = "logging"))]
+            #[cfg(not(feature = "tracing"))]
             eprintln!("Could not mprotect memory of the thyme; aborting.");
 
             return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
@@ -698,10 +874,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     };
 
     let Ok(addresses) = env::var("BIND_TO") else {
-        #[cfg(feature = "logging")]
+        #[cfg(feature = "tracing")]
         tracing::error!("No addresses could be found to bind to (set BIND_TO?)");
 
-        #[cfg(not(feature = "logging"))]
+        #[cfg(not(feature = "tracing"))]
         eprintln!("No addresses could be found to bind to (set BIND_TO?)");
 
         return Err(None);
@@ -712,31 +888,31 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     for address in addresses.split_terminator(",") {
         let l = match TcpListener::bind(address).await {
             Ok(l) => {
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "tracing")]
                 tracing::info!("The PHash server will run on http://{address}");
 
                 l
             }
             Err(e) if args.fail_forward_on_bind => {
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "tracing")]
                 tracing::warn!(
                     name: "Could not bind to address",
                     ?address,
                 );
 
-                #[cfg(not(feature = "logging"))]
+                #[cfg(not(feature = "tracing"))]
                 eprintln!("Could not bind to address {address}; continuing...");
 
                 continue;
             }
             Err(e) => {
-                #[cfg(feature = "logging")]
+                #[cfg(feature = "tracing")]
                 tracing::error!(?address,);
 
-                #[cfg(not(feature = "logging"))]
+                #[cfg(not(feature = "tracing"))]
                 eprintln!("Could not bind to address {address}; aborting...");
 
-                return Err(Some(Box::new(e)));
+                return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
             }
         };
 
@@ -753,6 +929,6 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
     } else {
         Err(Some(Box::new(unsafe {
             (errs.first().unwrap() as *const std::io::Error).read()
-        })))
+        }) as Box<dyn std::error::Error>))
     }
 }

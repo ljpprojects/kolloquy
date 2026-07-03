@@ -8,3 +8,7 @@ build
 ssl
 .idea
 test
+
+# Since the kolloquy crate and most subcrates are library crates, we should not
+# include the Cargo.lock.
+Cargo.lock

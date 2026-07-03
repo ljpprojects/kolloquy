@@ -17,6 +17,8 @@ PASS2_PEPPER=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 # USE_KEYRING=1 ... ./kolloquy-phash -ST0 (generally thyme id #0 should be the one you reach for)
 # USE_KEYRING=1 ... ./kolloquy-phash -T0  (this will try to read the thyme from the keyring rather than force you to input it to stdin)
 #
+# On Linux, the thyme only persists in the keyring until reboot!
 #
-# This is the reccomended mode of usage
+#
+# This is the recommended mode of usage
 USE_KEYRING=1
