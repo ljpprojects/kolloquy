@@ -27,5 +27,3 @@ all files and directories are owned by `klqy` unless specified otherwise):
     └── ssl.key     (Private key of the SSL keypair, PEM format, 0400)
 └── cache           (Directory to use for cache, 0600)
 ```
-
-(Technically anything more restrctive than `0700` doesn't really matter)

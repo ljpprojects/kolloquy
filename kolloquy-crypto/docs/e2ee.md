@@ -34,7 +34,7 @@ device's associated passkey. The PRF extension is used to get 32 bytes of
 material.
 
 If the device is not device 0, we must request authentication on device 0 using
-its passkey. 
+its passkey.
 
 With the following material, we concatenate the user id (which is essentially
 30b of entropy), the chat id (which is another 30b of entropy), and XOR the

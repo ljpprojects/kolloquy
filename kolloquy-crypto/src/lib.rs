@@ -12,7 +12,7 @@ use worker::{
     wasm_bindgen_futures::JsFuture,
 };
 
-fn webcrypto() -> Crypto {
+pub(crate) fn webcrypto() -> Crypto {
     Reflect::get(&global().into(), &"crypto".into()).unwrap().into()
 }
 

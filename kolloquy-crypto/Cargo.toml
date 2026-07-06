@@ -7,13 +7,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-worker = "0.8"
-base64 = "0.22"
-stack-string = "1.1"
+web-sys = { version = "0.3.103", features = ["Window", "Crypto", "SubtleCrypto", "CryptoKey"] }
 kolloquy-consts = { path = "../kolloquy-consts" }
+kolloquy-phash = { path = "../kolloquy-phash" }
+worker = "0.8.5"
+base64 = "0.22.1"
+stack-string = "1.1.5"
 phc = "0.6.1"
-
-[dependencies.web-sys]
-version = "0.3"
-default-features = false
-features = ["Crypto", "Window", "SubtleCrypto", "CryptoKey"]

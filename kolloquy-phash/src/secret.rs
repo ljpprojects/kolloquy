@@ -1,7 +1,7 @@
 use kolloquy_consts::KOLLOQUY_SERVICE_STR;
 use zeroize::Zeroizing;
 
-use crate::PASS2_THYME_SIZE;
+use crate::consts::PASS2_THYME_SIZE;
 
 pub fn get_thyme_from_keyring(
     id: usize,

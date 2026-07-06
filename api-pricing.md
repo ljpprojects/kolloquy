@@ -12,10 +12,6 @@ The API uses the following measurements:
 
 `kb/ptp/mon` (_kilobytes per participant per month_) for video and audio data sent during calls.
 
-NOTE: `encyrptions/month` was an unfair measure, as the developer has no control
-over how many times a message may be needed to be reencrypted, but they do know
-how many users they are sending to.
-
 A month is 30 days.
 
 ## Costs

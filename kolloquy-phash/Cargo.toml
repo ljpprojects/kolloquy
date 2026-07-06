@@ -29,6 +29,7 @@ serde_json = "1.0.150"
 keyring-core = "1.0.0"
 secrecy = "0.10.3"
 region = "3.0.2"
+rpassword = "7.5.4"
 
 # logging feature
 tracing = { version = "0.1.44", optional = true }
