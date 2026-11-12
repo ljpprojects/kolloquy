@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["success"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Whether or not the session creation succeeded."
+    },
+    "error": {
+      "type": "object",
+      "description": "Any errors that ocurred during the session creation."
+    }
+  }
+}

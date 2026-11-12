@@ -1,6 +1,7 @@
-#![allow(internal_features)]
-#![allow(incomplete_features)] // Totally not sketchy code lies below
+// Totally not sketchy code lies below
 
+#![allow(internal_features)]
+#![allow(incomplete_features)]
 #![feature(const_trait_impl)]
 #![feature(const_index)]
 #![feature(panic_internals)]
@@ -35,7 +36,7 @@ pub const PHASH_MAGIC_NUM_010: u64 = 0x000100AB_CF77931C; // AAEAq893kxw, in use
 pub const PHASH_MAGIC_STR_010: &str = unsafe {
     str::from_utf8_unchecked(&base64_encode(
         PHASH_MAGIC_NUM_010.to_be_bytes(),
-        base64url_alphabet()
+        base64url_alphabet(),
     ))
 };
 
@@ -66,15 +67,22 @@ pub const PASS1_DIGEST_SIZE: usize = 32;
 pub const PASS1_PEPPER_SIZE: usize = 36;
 pub const PASS1_PEPPER_SECRET_NAME: &str = "PASS1_PEPPER";
 
+// Static check for stage 1 digest size
+pub const _CHECK: () = const {
+    match PASS1_DIGEST_SIZE {
+        32 | 48 | 64 => (),
+        _ => panic!("The PASS1_DIGEST_SIZE should be either 32, 48, or 64."),
+    }
+};
+
 // Password hashing params (stage 2)
 // The stage 2 output might look like this: _k9Yas6VacL3wUn45RD1pJ0W6aKPcmnX-mk3h8hk_RCIP-oTmD0WGqjleDl-uIQ2
 pub const PASS2_SALT_SIZE: usize = 24;
 pub const PASS2_DIGEST_SIZE: usize = 48;
 
 pub const KOLLOQUY_VERSION: usize = 1;
-pub const KOLLOQUY_VERSION_STR: &str = unsafe {
-    str::from_utf8_unchecked(&extract_version_from_magic_num(PHASH_MAGIC_NUM_010))
-};
+pub const KOLLOQUY_VERSION_STR: &str =
+    unsafe { str::from_utf8_unchecked(&extract_version_from_magic_num(PHASH_MAGIC_NUM_010)) };
 
 pub const fn magic_num_for_version(ver: &str) -> u64 {
     let ver = ver.as_bytes();
@@ -91,7 +99,7 @@ pub const fn magic_num_for_version(ver: &str) -> u64 {
 
     match (maj, min, pat) {
         (0, 1, 0) => PHASH_MAGIC_NUM_010,
-        _ => core::panicking::panic(msg)
+        _ => core::panicking::panic(msg),
     }
 }
 
@@ -197,8 +205,19 @@ pub const fn bull64_rev_alphabet() -> [u8; 80] {
     reverse_alphabet
 }
 
-pub const fn base64_encode<const N: usize>(data: [u8; N], alphabet: [u8; 64]) -> [u8; (N * 8).div_ceil(6)] {
+pub const fn base64_encode<const N: usize>(
+    data: [u8; N],
+    alphabet: [u8; 64],
+) -> [u8; (N * 8).div_ceil(6)] {
     let mut out = [0u8; (N * 8).div_ceil(6)];
+    base64_encode_slice(&data, &mut out, alphabet);
+    out
+}
+
+pub const fn base64_encode_slice(data: &[u8], out: &mut [u8], alphabet: [u8; 64]) -> usize {
+    if out.len() < (data.len() * 8).div_ceil(6) {
+        panic!("Too small output buffer for base64_decode_slice");
+    }
 
     // Every 3 bytes = 4 chars
     let (chunks, remaining) = data.as_chunks::<3>();
@@ -221,7 +240,7 @@ pub const fn base64_encode<const N: usize>(data: [u8; N], alphabet: [u8; 64]) ->
         i += 1;
     }
 
-    let size = (N * 8).div_ceil(6);
+    let size = (data.len() * 8).div_ceil(6);
 
     if let [a] = remaining {
         let w = (a & 0b1111_1100) >> 2;
@@ -241,11 +260,26 @@ pub const fn base64_encode<const N: usize>(data: [u8; N], alphabet: [u8; 64]) ->
         out[size - 1] = alphabet[y as usize];
     }
 
+    size
+}
+
+pub const fn base64_decode<const N: usize>(
+    encoded: [u8; N],
+    reverse_alphabet: [u8; 80],
+) -> [u8; (N * 6).div_floor(8)] {
+    let mut out = [0u8; (N * 6).div_floor(8)];
+    base64_decode_slice(&encoded, &mut out, reverse_alphabet);
     out
 }
 
-pub const fn base64_decode<const N: usize>(encoded: [u8; N], reverse_alphabet: [u8; 80]) -> [u8; (N * 6).div_floor(8)] {
-    let mut out = [0u8; (N * 6).div_floor(8)];
+pub const fn base64_decode_slice(
+    encoded: &[u8],
+    out: &mut [u8],
+    reverse_alphabet: [u8; 80],
+) -> usize {
+    if out.len() < (encoded.len() * 6).div_floor(8) {
+        panic!("Too small output buffer for base64_decode_slice");
+    }
 
     // Every 4 chars = 3 bytes
     let (chunks, remaining) = encoded.as_chunks::<4>();
@@ -271,7 +305,7 @@ pub const fn base64_decode<const N: usize>(encoded: [u8; N], reverse_alphabet: [
         i += 1;
     }
 
-    let size = (N * 6).div_floor(8);
+    let size = (encoded.len() * 6).div_floor(8);
 
     if let [w, x] = remaining {
         let w = reverse_alphabet[*w as usize - 43];
@@ -292,5 +326,5 @@ pub const fn base64_decode<const N: usize>(encoded: [u8; N], reverse_alphabet: [
         out[size - 1] = b;
     }
 
-    out
+    size
 }

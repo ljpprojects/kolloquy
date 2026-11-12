@@ -1,8 +1,7 @@
 pub mod phash;
 
-use std::sync::Arc;
+use std::{ops::Sub, sync::Arc};
 
-use base64::Engine;
 use stack_string::SmallString;
 use web_sys::{Crypto, CryptoKey};
 use worker::{
@@ -13,20 +12,27 @@ use worker::{
 };
 
 pub(crate) fn webcrypto() -> Crypto {
-    Reflect::get(&global().into(), &"crypto".into()).unwrap().into()
+    Reflect::get(&global().into(), &"crypto".into())
+        .unwrap()
+        .into()
 }
 
 pub async fn get_totp_wrapping_key(env: Arc<Env>) -> Result<CryptoKey, JsValue> {
     let mut key_bytes = [0u8; 32];
 
     let encoded_key_bytes: String = env.secret("TOTP_WRAPPING_KEY").unwrap().to_string();
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode_slice(encoded_key_bytes, &mut key_bytes)
-        .unwrap();
+    kolloquy_consts::base64_decode_slice(
+        encoded_key_bytes.as_bytes(),
+        &mut key_bytes,
+        kolloquy_consts::base64url_rev_alphabet(),
+    );
 
     let key_bytes_array = Uint8Array::new_from_slice(&key_bytes);
 
-    let key_usages = ["wrapKey", "unwrapKey"].into_iter().map(JsValue::from).collect::<Array>();
+    let key_usages = ["wrapKey", "unwrapKey"]
+        .into_iter()
+        .map(JsValue::from)
+        .collect::<Array>();
 
     let key = JsFuture::from(
         webcrypto()
@@ -41,11 +47,16 @@ pub async fn get_totp_wrapping_key(env: Arc<Env>) -> Result<CryptoKey, JsValue> 
 
 pub fn random_bytes<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
-    webcrypto().get_random_values_with_u8_array(&mut bytes).unwrap();
+    webcrypto()
+        .get_random_values_with_u8_array(&mut bytes)
+        .unwrap();
     bytes
 }
 
-pub async fn unwrap_totp_key(wrapped_secret: [u8; 32], env: Arc<Env>) -> Result<CryptoKey, JsValue> {
+pub async fn unwrap_totp_key(
+    wrapped_secret: [u8; 32],
+    env: Arc<Env>,
+) -> Result<CryptoKey, JsValue> {
     let wrapping_key = get_totp_wrapping_key(env.clone()).await?;
 
     // TOTP secret is a HMAC-SHA1 key of length 160 bits
@@ -56,17 +67,25 @@ pub async fn unwrap_totp_key(wrapped_secret: [u8; 32], env: Arc<Env>) -> Result<
         obj
     };
 
-    let usages = ["sign", "verify"].into_iter().map(JsValue::from).collect::<Array>();
+    let usages = ["sign", "verify"]
+        .into_iter()
+        .map(JsValue::from)
+        .collect::<Array>();
 
-    let key = JsFuture::from(webcrypto().subtle().unwrap_key_with_u8_array_and_str_and_object(
-        "raw",
-        &wrapped_secret,
-        &wrapping_key,
-        "AES-KW",
-        &key_alg,
-        false,
-        &usages
-    )?).await?;
+    let key = JsFuture::from(
+        webcrypto()
+            .subtle()
+            .unwrap_key_with_u8_array_and_str_and_object(
+                "raw",
+                &wrapped_secret,
+                &wrapping_key,
+                "AES-KW",
+                &key_alg,
+                false,
+                &usages,
+            )?,
+    )
+    .await?;
 
     Ok(CryptoKey::from(key))
 }
@@ -76,8 +95,9 @@ pub async fn wrap_totp_key(key: &CryptoKey, env: Arc<Env>) -> Result<[u8; 32], J
         "raw",
         &key,
         &get_totp_wrapping_key(env).await?,
-        "AES-KW"
-    )?).await?;
+        "AES-KW",
+    )?)
+    .await?;
 
     let bytes = Uint8Array::from(bytes);
 
@@ -96,3 +116,18 @@ pub async fn wrap_totp_key(key: &CryptoKey, env: Arc<Env>) -> Result<[u8; 32], J
     Ok(dst)
 }
 
+pub trait ExportBytes {
+    async fn export_bytes(&self) -> Vec<u8>;
+}
+
+impl ExportBytes for CryptoKey {
+    async fn export_bytes(&self) -> Vec<u8> {
+        let raw = JsFuture::from(webcrypto().subtle().export_key("raw", key).unwrap())
+            .await
+            .unwrap();
+
+        let arr = Uint8Array::new(&raw);
+
+        arr.to_vec()
+    }
+}

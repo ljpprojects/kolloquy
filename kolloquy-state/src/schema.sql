@@ -78,7 +78,7 @@ create table user_devices(
 -- A user can have 3 passkeys at most (as each passkey has a different key)
 create table user_passkeys(
     credential_id text not null, -- Base64url-encoded PublicKeyCredential.id
-    user_id text not null,       -- ID of the user whose passkey this is
+    id text not null,       -- ID of the user whose passkey this is
 
     -- signature counter; if new_count <= counter then the login is flagged and
     -- will require MFA (or block if no MFA is available).
@@ -87,9 +87,9 @@ create table user_passkeys(
     public_key text not null,
     webauthn_challenge text,    -- Stores the challenge for WebAuthn registration/login
 
-    primary key(credential_id, user_id),
+    primary key(credential_id, id),
 
-    foreign key(user_id) references users(id)
+    foreign key(id) references users(id)
         on delete cascade
 ) strict;
 
