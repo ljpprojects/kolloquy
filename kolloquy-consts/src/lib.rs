@@ -14,8 +14,10 @@ use std::mem;
 
 pub const KOLLOQUY_SERVICE_STR: &str = "com.kolloquy";
 
-// Binding names
-pub const PHASH_MTLS_BINDING_NAME: &str = "PHASH_MTLS";
+// Paths to PEM files!!
+pub const PHASH_MTLS_CLIENT_NAME: &str = "PHASH_MTLS_CLIENT";
+pub const PHASH_MTLS_ROOT_NAME: &str = "PHASH_MTLS_ROOT";
+
 pub const USERS_DB_BINDING_NAME: &str = "USERS_DB";
 pub const SESSIONS_DB_BINDING_NAME: &str = "SESSIONS_DB";
 
@@ -25,15 +27,19 @@ pub const USERS_BUCKET_NAME: &str = "USERS_R2"; // Stores user avatars
 
 pub const ANALYTICS_BINDING_NAME: &str = "KOLLOQUY_ANALYTICS";
 
+pub const TOTP_WRAP_KEY_NAME: &str = "TOTP_WRAPPING_KEY";
+pub const PHASH_SERV_URL_NAME: &str = "PHASH_SERVER_URL";
+
+pub const SERVER_VERSION_HEADER: &str = "X-Kolloquy-Server-Version";
+
 // Password hashing magic numbers
 // Each Kolloquy version has a new magic number.
 // We can use the magic number to determine the version and age of password
 // hashes (via associated data)
 
 /// The magic number for Kolloquy PHASH version 0.1.0
-pub const PHASH_MAGIC_NUM_010: u64 = 0x000100AB_CF77931C; // AAEAq893kxw, in use since \[DD/MM/YYYY] in production
-
-pub const PHASH_MAGIC_STR_010: &str = unsafe {
+pub const PHASH_MAGIC_NUM_010: u64 = 0x000100AB_CF77931C;
+pub const PHASH_MAGIC_STR_010: &str = unsafe { // AAEAq893kxw
     str::from_utf8_unchecked(&base64_encode(
         PHASH_MAGIC_NUM_010.to_be_bytes(),
         base64url_alphabet(),
@@ -43,9 +49,9 @@ pub const PHASH_MAGIC_STR_010: &str = unsafe {
 #[test]
 fn _constb64() {
     let (original, encoded, decoded) = const {
-        let original = *b"Many hands make... light work!?!?";
-        let encoded = base64_encode(original, bull64_alphabet());
-        let decoded = base64_decode(encoded, bull64_rev_alphabet());
+        let original = *b"Penumbra Phantasm [[BIG SHOT]] World Revolving";
+        let encoded = base64_encode(original, base64url_alphabet());
+        let decoded = base64_decode(encoded, base64url_rev_alphabet());
         (original, encoded, decoded)
     };
 
@@ -54,7 +60,6 @@ fn _constb64() {
     let decoded = unsafe { str::from_utf8_unchecked(&decoded) };
 
     println!("{encoded}");
-    assert_eq!(encoded, "uM4-Ut8jOMbdS\\8COMCem@:-13]hP;aB12T=S^+aq\\5?");
 
     println!("{decoded}");
     assert_eq!(decoded, original);
@@ -65,13 +70,13 @@ fn _constb64() {
 pub const PASS1_SALT_SIZE: usize = 30;
 pub const PASS1_DIGEST_SIZE: usize = 32;
 pub const PASS1_PEPPER_SIZE: usize = 36;
-pub const PASS1_PEPPER_SECRET_NAME: &str = "PASS1_PEPPER";
+pub const PASS1_PEPPER_NAME: &str = "PASS1_PEPPER";
 
-// Static check for stage 1 digest size
-pub const _CHECK: () = const {
+#[allow(non_upper_case_globals)]
+const _pass1_conf_chk: () = {
     match PASS1_DIGEST_SIZE {
-        32 | 48 | 64 => (),
-        _ => panic!("The PASS1_DIGEST_SIZE should be either 32, 48, or 64."),
+        24 | 32 | 48 | 64 => (),
+        _ => panic!("PASS1_DIGEST_SIZE is not 28, 32, 48, or 64.")
     }
 };
 
@@ -79,6 +84,9 @@ pub const _CHECK: () = const {
 // The stage 2 output might look like this: _k9Yas6VacL3wUn45RD1pJ0W6aKPcmnX-mk3h8hk_RCIP-oTmD0WGqjleDl-uIQ2
 pub const PASS2_SALT_SIZE: usize = 24;
 pub const PASS2_DIGEST_SIZE: usize = 48;
+pub const PASS2_PEPPER_SIZE: usize = 30;
+pub const PASS2_THYME_SIZE: usize = 384;
+pub const PASS2_PEPPER_NAME: &str = "PASS2_PEPPER";
 
 pub const KOLLOQUY_VERSION: usize = 1;
 pub const KOLLOQUY_VERSION_STR: &str =
@@ -135,8 +143,8 @@ pub const fn bull64_alphabet() -> [u8; 64] {
     *b"9876543210lmnopqrstuvLMNOPQRSTUVDa@cde^fjhi_+C-=[]\\AB|;g:b,./<>?"
 }
 
-pub const fn base64url_rev_alphabet() -> [u8; 80] {
-    let mut reverse_alphabet = [0u8; 80]; // Reverse lookup table
+pub const fn base64url_rev_alphabet() -> [u8; 82] {
+    let mut reverse_alphabet = [0u8; 82]; // Reverse lookup table
 
     let mut i = 0;
     while i < 26 {
@@ -157,8 +165,8 @@ pub const fn base64url_rev_alphabet() -> [u8; 80] {
     reverse_alphabet
 }
 
-pub const fn base64_rev_alphabet() -> [u8; 80] {
-    let mut reverse_alphabet = [0u8; 80]; // Reverse lookup table
+pub const fn base64_rev_alphabet() -> [u8; 82] {
+    let mut reverse_alphabet = [0u8; 82]; // Reverse lookup table
 
     let mut i = 0;
     while i < 26 {
@@ -179,8 +187,8 @@ pub const fn base64_rev_alphabet() -> [u8; 80] {
     reverse_alphabet
 }
 
-pub const fn bull64_rev_alphabet() -> [u8; 80] {
-    let mut reverse_alphabet = [0u8; 80]; // Reverse lookup table
+pub const fn bull64_rev_alphabet() -> [u8; 82] {
+    let mut reverse_alphabet = [0u8; 82]; // Reverse lookup table
 
     let mut i = 10;
     while i > 0 {
@@ -195,9 +203,9 @@ pub const fn bull64_rev_alphabet() -> [u8; 80] {
         i += 1;
     }
 
-    let seq = *b"Da@cde^fjhi_+C-=[]\\ABx;g:b,./<>?";
+    let seq = *b"Da@cde^fjhi_+C-=[]\\ABx;g:b,./<>?|";
     i = 0;
-    while i < 32 {
+    while i < 33 {
         reverse_alphabet[seq[i] as usize - 43] = 32 + i as u8;
         i += 1;
     }
@@ -265,20 +273,20 @@ pub const fn base64_encode_slice(data: &[u8], out: &mut [u8], alphabet: [u8; 64]
 
 pub const fn base64_decode<const N: usize>(
     encoded: [u8; N],
-    reverse_alphabet: [u8; 80],
+    reverse_alphabet: [u8; 82],
 ) -> [u8; (N * 6).div_floor(8)] {
     let mut out = [0u8; (N * 6).div_floor(8)];
     base64_decode_slice(&encoded, &mut out, reverse_alphabet);
     out
 }
 
-pub const fn base64_decode_slice(
+pub const fn base64_decode_slice_safe(
     encoded: &[u8],
     out: &mut [u8],
-    reverse_alphabet: [u8; 80],
-) -> usize {
+    reverse_alphabet: [u8; 82],
+) -> Option<usize> {
     if out.len() < (encoded.len() * 6).div_floor(8) {
-        panic!("Too small output buffer for base64_decode_slice");
+        return None;
     }
 
     // Every 4 chars = 3 bytes
@@ -287,6 +295,7 @@ pub const fn base64_decode_slice(
     let mut i = 0;
     while i < chunks.len() {
         let [w, x, y, z] = chunks[i];
+
         let w = reverse_alphabet[w as usize - 43];
         let x = reverse_alphabet[x as usize - 43];
         let y = reverse_alphabet[y as usize - 43];
@@ -326,5 +335,14 @@ pub const fn base64_decode_slice(
         out[size - 1] = b;
     }
 
-    size
+    Some(size)
+}
+
+pub const fn base64_decode_slice(
+    encoded: &[u8],
+    out: &mut [u8],
+    reverse_alphabet: [u8; 82],
+) -> usize {
+    base64_decode_slice_safe(encoded, out, reverse_alphabet)
+        .expect("Too small output buffer for base64_decode_slice")
 }

@@ -23,9 +23,8 @@ use {
     tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt},
 };
 
-use crate::consts::PASS2_PEPPER_SIZE;
 use crate::{
-    cli::Arguments, consts::{PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE}, hash::compute_stage_2_digest, secret::{get_thyme_from_keyring, put_thyme_to_keyring}
+    cli::Arguments, hash::compute_stage_2_digest, secret::{get_thyme_from_keyring, put_thyme_to_keyring}
 };
 
 #[cfg(feature = "tracing")]
@@ -34,21 +33,14 @@ use axum::{
     Router,
     extract::{Path, State},
     http::{HeaderMap, Response, StatusCode},
-    routing::post,
-};
-
-use base64::{
-    DecodeSliceError, Engine,
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
 
 use clap::Parser;
-use core::slice;
 use keyring_core::Error as KeyringError;
-use kolloquy_consts::{KOLLOQUY_VERSION_STR, PASS1_DIGEST_SIZE, PASS2_SALT_SIZE};
+use kolloquy_consts::{KOLLOQUY_VERSION_STR, PASS1_DIGEST_SIZE, PASS2_SALT_SIZE, base64_decode_slice, base64_decode_slice_safe, base64_rev_alphabet, base64url_rev_alphabet, PASS2_THYME_SIZE, PASS2_PEPPER_SIZE, PASS2_PEPPER_NAME};
 use mimalloc::MiMalloc;
 use stack_string::SmallString;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use std::{
     env, fs::File, io, ops::Mul, os::unix::fs::PermissionsExt, path::PathBuf, sync::Arc,
@@ -64,16 +56,6 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 pub struct ServerState {
     pub thyme: Arc<Zeroizing<[u8; PASS2_THYME_SIZE]>>,
-}
-
-impl Zeroize for ServerState {
-    fn zeroize(&mut self) {
-        let thyme = self.thyme.as_ptr() as *mut u8;
-
-        // Mutable alias of self.thyme, but this never happened, trust me
-        let thyme = unsafe { slice::from_raw_parts_mut(thyme, self.thyme.len()) };
-        thyme.zeroize();
-    }
 }
 
 // Am I crazy or the less sleep I get the more productive I am? Like I am running on 3 hours of sleep (4 AM - 7 AM) and have been more productive than I have for the past like two weeks
@@ -100,7 +82,7 @@ async fn handle_phash_req(
     Path((b64_digest, b64_salt)): Path<(SmallString<{ PASS1_DIGEST_SIZE.mul(8).div_ceil(6) }>, SmallString<{ PASS2_SALT_SIZE.mul(8).div_ceil(6) }>)>,
     headers: HeaderMap,
 ) -> Response<String> {
-    use crate::consts::errcodes::{INVALID_DIGEST, INVALID_DIGEST_SIZE, INVALID_SALT_SIZE, INVALID_SALT, NO_VERSION_SPECIFIED, VERSION_MISMATCH, INVALID_VERSION};
+    use crate::consts::errcodes::{INVALID_DIGEST_SIZE, INVALID_SALT_SIZE, NO_VERSION_SPECIFIED, VERSION_MISMATCH, INVALID_VERSION};
 
     #[cfg(feature = "tracing")]
     tracing::info!("PHash request reached backend");
@@ -183,10 +165,14 @@ async fn handle_phash_req(
     };
 
     let mut digest_1 = [0u8; PASS1_DIGEST_SIZE];
-    match URL_SAFE_NO_PAD.decode_slice(b64_digest, &mut digest_1) {
-        Ok(n) if n != PASS1_DIGEST_SIZE => {
+    match base64_decode_slice_safe(
+        b64_digest.as_bytes(),
+        &mut digest_1,
+        base64url_rev_alphabet()
+    ) {
+        Some(n) if n != PASS1_DIGEST_SIZE => {
             let mut err = Response::new(format!(
-                "{INVALID_DIGEST_SIZE}: The given digest is not {PASS1_DIGEST_SIZE} bytes long."
+                "{INVALID_DIGEST_SIZE}: The given digest is less than {PASS1_DIGEST_SIZE} bytes long."
             ));
 
             err.headers_mut().insert(
@@ -201,57 +187,36 @@ async fn handle_phash_req(
             *(err.status_mut()) = StatusCode::BAD_REQUEST;
             return err;
         }
-        Ok(_) => (),
-        Err(e) => match e {
-            DecodeSliceError::OutputSliceTooSmall => {
-                let mut err = Response::new(format!(
-                    "{INVALID_DIGEST_SIZE}: The given digest is not {PASS1_DIGEST_SIZE} bytes long."
-                ));
+        None => {
+            let mut err = Response::new(format!(
+                "{INVALID_DIGEST_SIZE}: The given digest is more than {PASS1_DIGEST_SIZE} bytes long."
+            ));
 
-                *(err.status_mut()) = StatusCode::BAD_REQUEST;
+            err.headers_mut().insert(
+                "Content-Type",
+                "text/plain".try_into().unwrap()
+            );
 
-                err.headers_mut().insert(
-                    "Content-Type",
-                    "text/plain".try_into().unwrap()
-                );
-
-                err.headers_mut().insert(
-                    "X-Kolloquy-Server-Version",
-                    KOLLOQUY_VERSION_STR.try_into().unwrap(),
-                );
-
-                return err;
-            }
-            DecodeSliceError::DecodeError(de) => {
-                let mut err = Response::new(format!(
-                    "{INVALID_DIGEST}: The given digest is not valid base64: {de:?}."
-                ));
-
-                *(err.status_mut()) = StatusCode::BAD_REQUEST;
-
-                err.headers_mut().insert(
-                    "Content-Type",
-                    "text/plain".try_into().unwrap()
-                );
-
-                err.headers_mut().insert(
-                    "X-Kolloquy-Server-Version",
-                    KOLLOQUY_VERSION_STR.try_into().unwrap(),
-                );
-
-                return err;
-            }
-        },
+            err.headers_mut().insert(
+                "X-Kolloquy-Server-Version",
+                KOLLOQUY_VERSION_STR.try_into().unwrap(),
+            );
+            *(err.status_mut()) = StatusCode::BAD_REQUEST;
+            return err;
+        }
+        Some(_) => (),
     };
 
     let mut salt_2 = [0u8; PASS2_SALT_SIZE];
-    match URL_SAFE_NO_PAD.decode_slice(b64_salt, &mut salt_2) {
-        Ok(n) if n != PASS2_SALT_SIZE => {
+    match base64_decode_slice_safe(
+        b64_salt.as_bytes(),
+        &mut salt_2,
+        base64url_rev_alphabet()
+    ) {
+        Some(n) if n != PASS1_DIGEST_SIZE => {
             let mut err = Response::new(format!(
-                "{INVALID_SALT_SIZE}: The given salt is not {PASS2_SALT_SIZE} bytes long."
+                "{INVALID_SALT_SIZE}: The given digest is less than {PASS2_SALT_SIZE} bytes long."
             ));
-
-            *(err.status_mut()) = StatusCode::BAD_REQUEST;
 
             err.headers_mut().insert(
                 "Content-Type",
@@ -262,50 +227,27 @@ async fn handle_phash_req(
                 "X-Kolloquy-Server-Version",
                 KOLLOQUY_VERSION_STR.try_into().unwrap(),
             );
-
+            *(err.status_mut()) = StatusCode::BAD_REQUEST;
             return err;
         }
-        Ok(_) => (),
-        Err(e) => match e {
-            DecodeSliceError::OutputSliceTooSmall => {
-                let mut err = Response::new(format!(
-                    "{INVALID_SALT_SIZE}: The given salt is not {PASS2_SALT_SIZE} bytes long.",
-                ));
+        None => {
+            let mut err = Response::new(format!(
+                "{INVALID_SALT_SIZE}: The given digest is more than {PASS2_SALT_SIZE} bytes long."
+            ));
 
-                *(err.status_mut()) = StatusCode::BAD_REQUEST;
+            err.headers_mut().insert(
+                "Content-Type",
+                "text/plain".try_into().unwrap()
+            );
 
-                err.headers_mut().insert(
-                    "Content-Type",
-                    "text/plain".try_into().unwrap()
-                );
-
-                err.headers_mut().insert(
-                    "X-Kolloquy-Server-Version",
-                    KOLLOQUY_VERSION_STR.try_into().unwrap(),
-                );
-
-                return err;
-            }
-            DecodeSliceError::DecodeError(de) => {
-                let mut err = Response::new(format!(
-                    "{INVALID_SALT}: The given digest is not valid base64: {de:?}."
-                ));
-
-                *(err.status_mut()) = StatusCode::BAD_REQUEST;
-
-                err.headers_mut().insert(
-                    "Content-Type",
-                    "text/plain".try_into().unwrap()
-                );
-
-                err.headers_mut().insert(
-                    "X-Kolloquy-Server-Version",
-                    KOLLOQUY_VERSION_STR.try_into().unwrap(),
-                );
-
-                return err;
-            }
-        },
+            err.headers_mut().insert(
+                "X-Kolloquy-Server-Version",
+                KOLLOQUY_VERSION_STR.try_into().unwrap(),
+            );
+            *(err.status_mut()) = StatusCode::BAD_REQUEST;
+            return err;
+        }
+        Some(_) => (),
     };
 
     #[cfg(feature = "tracing")]
@@ -422,11 +364,11 @@ fn envcheck() -> Result<bool, std::io::Error> {
         panic!("envcheck failed")
     }
 
-    let Ok(pass2_pepper) = env::var(PASS2_PEPPER_VAR_NAME) else {
+    let Ok(pass2_pepper) = env::var(PASS2_PEPPER_NAME) else {
         raise_error!(
             name: "required_env_var_missing",
             target: "envcheck",
-            "The {PASS2_PEPPER_VAR_NAME} environment variable is required (try including it in your .env file)"
+            "The {PASS2_PEPPER_NAME} environment variable is required (try including it in your .env file)"
         );
 
         return Ok(false)
@@ -443,17 +385,8 @@ fn envcheck() -> Result<bool, std::io::Error> {
         return Ok(false)
     }
 
-    // Ensure that the pepper is valid base64 by decoding
-    let mut _buf = [0u8; PASS2_PEPPER_SIZE];
-    if let Err(e) = STANDARD.decode_slice_unchecked(pass2_pepper.clone(), &mut _buf) { // We know the pepper is 30 bytes long, so we know that _buf is large enough
-        raise_error!(
-            name: "invalid_pepper",
-            target: "envcheck",
-            "The pepper ({pass2_pepper}) is not valid base64: {e}"
-        );
-
-        return Ok(false)
-    };
+    // Ensure that the pepper is valid base64 by decoding.... is what I would do
+    // if the base64 decoder didn't take whatever garbage it receieves!!!!!
 
     if env::var("BIND_TO").is_err() {
         raise_error!(
@@ -485,7 +418,8 @@ fn filecheck() {
         (PathBuf::from("./phash/ssl.crt"), 0o400),
         (PathBuf::from("./phash/ssl.key"), 0o400),
 
-        (PathBuf::from("./cache"), 0o600), // Technically a directory but doesn't change how we check
+        // We no longer check perms on ./cache, we don't control it (nginx or
+        // whatever reverse proxy is used does)
     ];
 
     for (path, expected_perms) in required_files {
@@ -525,7 +459,7 @@ fn filecheck() {
             }
         };
 
-        let perms: u32 = perms.mode()  & 0o7777;
+        let perms: u32 = perms.mode() & 0o7777;
 
         if perms != expected_perms {
             raise_error!(
@@ -557,18 +491,6 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // So many arguments...
-    //
-    // kolloquy-phash --help
-    // Usage: kolloquy-phash [OPTIONS]
-    //
-    // Options:
-    //   -S, --set-thyme            Overwrite the thyme indicated by --thyme-id. Persists indefinitely on macOS and until reboot on Linux
-    //   -T, --thyme-id <THYME_ID>  ID of the thyme to use for this server
-    //   -B, --ff-on-bind           Do not exit if an address fails to bind
-    //       --no-filecheck         Skip checking for required files and directories, and skip checking their permissions. You should set this if you do not plan to use the default nginx config provided
-    //   -h, --help                 Print help
-
     match envcheck() {
         Ok(res) if !res => return Err(None), // envcheck handled logging
         Ok(_) => (),
@@ -581,8 +503,8 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         filecheck();
     }
 
-    // Should we try to load the thyme from the keyring (or should we try to set
-    // it if we later find -S is set)
+    // Should we try to load the thyme from the keyring? Should we try to set
+    // it if we later find -S is set?
     let use_keyring = env::var("USE_KEYRING").map_or(false, |v| &*v == "1");
 
     // Is only None if use_keyring is false
@@ -663,6 +585,9 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
             "This will invalidate ALL existing password hashes computed using thyme {thyme_id}."
         );
 
+        #[cfg(target_os = "linux")]
+        eprintln!("The thyme will not persist in the keyring across boots, so make sure to store it elsewhere too!");
+
         eprint!("Are you sure that you want to replace thyme {thyme_id}? [y/N] ");
 
         let mut line = String::new();
@@ -693,16 +618,15 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
                 let thyme = {
                     let b64_thyme = Zeroizing::new(rpassword::read_password().unwrap());
                     let mut t = Zeroizing::new([0u8; PASS2_THYME_SIZE]);
-                    STANDARD.decode_slice(&b64_thyme, &mut *t).unwrap();
+                    base64_decode_slice(b64_thyme.as_bytes(), &mut *t, base64_rev_alphabet());
 
                     t
                 };
 
-                #[cfg(feature = "tracing")]
-                tracing::info!("Setting thyme in keyring...");
-
-                #[cfg(not(feature = "tracing"))]
-                eprintln!("Setting thyme in keyring...");
+                log_trace!(
+                    name: "keyring_will_set",
+                    "Setting thyme in keyring..."
+                );
 
                 if let Err(e) = put_thyme_to_keyring(&thyme, thyme_id) {
                     raise_error!(
@@ -714,11 +638,10 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
                     return Err(Some(Box::new(e) as Box<dyn std::error::Error>));
                 };
 
-                #[cfg(feature = "tracing")]
-                tracing::info!("The thyme was stored in the keyring successfully.");
-
-                #[cfg(not(feature = "tracing"))]
-                eprintln!("The thyme was stored in the keyring successfully.");
+                log_info!(
+                    name: "keyring_was_set",
+                    "The thyme was stored in the keyring successfully."
+                );
 
                 thyme
             }
@@ -736,47 +659,18 @@ async fn main() -> Result<(), Option<Box<dyn std::error::Error>>> {
         let thyme = {
             let b64_thyme = Zeroizing::new(rpassword::read_password().unwrap());
             let mut t = Zeroizing::new([0u8; PASS2_THYME_SIZE]);
-            STANDARD.decode_slice(&b64_thyme, &mut *t).unwrap();
+            base64_decode_slice(b64_thyme.as_bytes(), &mut *t, base64_rev_alphabet());
 
             t
         };
 
         /*
-         * ------  --------    ---         -----
-         *    ---  ---  ---   -------    ------   --------
-         * ------  --------  ---   ---  --- ---   --------
-         *    ---  ---  ---       ---       ---
+         * ******  ********    ***         *****
+         *    ***  ***  ***   *******    ******   ********
+         * ******  ********  ***   ***  *** ***   ********
+         *    ***  ***  ***       ***       ***
          *
          * Who needs ASCII art when you have Katakana art
-         *
-         * And in vertical:
-         *
-         * --------
-         *     ----
-         * --------
-         *     ----
-         *
-         * --------
-         * ---  ---
-         * --------
-         * ---  ---
-         *
-         *   ---
-         *  -------
-         * ---   ---
-         *      ---
-         *
-         *    -----
-         *  ------
-         * --- ---
-         *     ---
-         *
-         * ----
-         * ----
-         * ----
-         * ----
-         *
-         * (vertical chōonpu mentioned)
          */
 
         /*

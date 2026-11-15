@@ -87,3 +87,93 @@ macro_rules! raise_warning {
         };
     };
 }
+
+/// Log info, using tracing::info if the "tracing" feature is enabled or by
+/// printing to stderr if it is not.
+#[macro_export]
+macro_rules! log_info {
+    (
+        name : $name:literal,
+        target : $target:literal,
+        $( $fmt:tt )+ // Just consume everything after lol
+    ) => {
+        {
+            #[cfg(feature = "tracing")]
+            tracing::info!(
+                name: $name,
+                target: $target,
+                $( $fmt )+
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            {
+                eprint!("INFO {} in {}: ", $name, $target);
+                eprintln!($( $fmt )+);
+            };
+        }
+    };
+
+    (
+        name : $name:literal,
+        $( $fmt:tt )+ // Just consume everything after lol
+    ) => {
+        {
+            #[cfg(feature = "tracing")]
+            tracing::info!(
+                name: $name,
+                $( $fmt )+
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            {
+                eprint!("INFO {}: ", $name);
+                eprintln!($( $fmt )+);
+            };
+        };
+    };
+}
+
+/// Log a trace, using tracing::trace if the "tracing" feature is enabled or by
+/// printing to stderr if it is not.
+#[macro_export]
+macro_rules! log_trace {
+    (
+        name : $name:literal,
+        target : $target:literal,
+        $( $fmt:tt )+ // Just consume everything after lol
+    ) => {
+        {
+            #[cfg(feature = "tracing")]
+            tracing::trace!(
+                name: $name,
+                target: $target,
+                $( $fmt )+
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            {
+                eprint!("Trace {} in {}: ", $name, $target);
+                eprintln!($( $fmt )+);
+            };
+        }
+    };
+
+    (
+        name : $name:literal,
+        $( $fmt:tt )+ // Just consume everything after lol
+    ) => {
+        {
+            #[cfg(feature = "tracing")]
+            tracing::trace!(
+                name: $name,
+                $( $fmt )+
+            );
+
+            #[cfg(not(feature = "tracing"))]
+            {
+                eprint!("Trace {}: ", $name);
+                eprintln!($( $fmt )+);
+            };
+        };
+    };
+}

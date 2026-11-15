@@ -1,7 +1,7 @@
-use crate::{consts::{PASS2_PEPPER_SIZE, PASS2_PEPPER_VAR_NAME, PASS2_THYME_SIZE}, ServerState};
+use crate::{ServerState};
 use argon2::{Algorithm, Argon2, AssociatedData, ParamsBuilder, PasswordHash, PasswordHasher, Version};
 use base64::{Engine, engine::general_purpose::STANDARD};
-use kolloquy_consts::{PASS1_DIGEST_SIZE, PASS2_DIGEST_SIZE, PHASH_MAGIC_NUM_010, PASS2_SALT_SIZE};
+use kolloquy_consts::{PASS1_DIGEST_SIZE, PASS2_DIGEST_SIZE, PHASH_MAGIC_NUM_010, PASS2_SALT_SIZE, PASS2_PEPPER_SIZE, PASS2_PEPPER_NAME, PASS2_THYME_SIZE};
 use std::{env, sync::Arc};
 use zeroize::Zeroizing;
 
@@ -25,7 +25,7 @@ pub fn compute_stage_2_digest(
         .unwrap();
 
     let mut pepper = [0u8; PASS2_PEPPER_SIZE];
-    STANDARD.decode_slice_unchecked(env::var(PASS2_PEPPER_VAR_NAME).unwrap(), &mut pepper).unwrap(); // envcheck ensures that the PASS2_PEPPER is valid base64 and the correct length. Also shouldn't decode_slice_unchecked be marked unsafe...? (Apparently it shouldn't, as it panics if the output buf is too small, rather than causing UB, but unchecked is misleading, because it is checked, it just fails differently)
+    STANDARD.decode_slice_unchecked(env::var(PASS2_PEPPER_NAME).unwrap(), &mut pepper).unwrap(); // envcheck ensures that the PASS2_PEPPER is valid base64 and the correct length. Also shouldn't decode_slice_unchecked be marked unsafe...? (Apparently it shouldn't, as it panics if the output buf is too small, rather than causing UB, but unchecked is misleading, because it is checked, it just fails differently)
 
     let mut full_secret = Zeroizing::new([0u8; PASS2_PEPPER_SIZE + PASS2_THYME_SIZE]);
     (&mut full_secret[..PASS2_THYME_SIZE]).copy_from_slice(&**state.thyme);

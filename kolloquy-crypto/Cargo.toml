@@ -7,14 +7,29 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-web-sys = { version = "0.3.103", features = [
-    "Window",
-    "Crypto",
-    "SubtleCrypto",
-    "CryptoKey",
-] }
+openssl = "0.10"
+rustls = "0.23"
 kolloquy-consts = { path = "../kolloquy-consts" }
 kolloquy-phash = { path = "../kolloquy-phash" }
-worker = "0.8.5"
-stack-string = "1.1.5"
+stack-string = "1.2"
 phc = "0.6.1"
+
+[dependencies.tokio]
+version = "1.54"
+features = ["net", "fs"]
+optional = true
+
+[dependencies.reqwest]
+version = "0.13"
+features = ["rustls"]
+optional = true
+
+[dependencies.argon2]
+version = "0.6"
+optional = true
+features = ["zeroize", "parallel"]
+
+[features]
+default = ["no-phash-serv"]
+no-phash-serv = ["dep:argon2"]
+use-phash-serv = ["dep:tokio", "dep:reqwest"]

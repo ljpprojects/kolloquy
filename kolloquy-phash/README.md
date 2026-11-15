@@ -2,6 +2,10 @@
 
 This is the server which Kolloquy uses to compute password hashes.
 
+**IMPORTANT: THE USE OF A PHASH SERVER IS NOT ENABLED BY DEFAULT, AND IS NOT
+RECOMMENDED IF YOU HAVE THE RESOURCES AVAILABLE TO COMPUTE THE HASHES ON ONE
+MAIN SERVER.**
+
 ## Tested Targets
 
 - `aarch64-apple-darwin`

@@ -1,29 +1,29 @@
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
 
 use argon2::PasswordHash;
 use crate::consts::errcodes::{INVALID_DIGEST, INVALID_DIGEST_SIZE, INVALID_SALT, INVALID_SALT_SIZE, INVALID_VERSION, NO_VERSION_SPECIFIED, VERSION_MISMATCH};
 
-pub enum PHashError<'a> {
-    InvalidDigest(&'a str),
-    InvalidDigestSize(&'a str),
+pub enum PHashError {
+    InvalidDigest(Box<str>),
+    InvalidDigestSize(Box<str>),
 
-    InvalidSalt(&'a str),
-    InvalidSaltSize(&'a str),
+    InvalidSalt(Box<str>),
+    InvalidSaltSize(Box<str>),
 
-    VersionMismatch(&'a str),
-    VersionUnspecified(&'a str),
-    InvalidVersion(&'a str),
+    VersionMismatch(Box<str>),
+    VersionUnspecified(Box<str>),
+    InvalidVersion(Box<str>),
 
     UnknownPanic,
 
     /// Different to Other in the way that an Unknown error did not have an error code, but an Other error did have an error code
-    Unknown(&'a str),
+    Unknown(Box<str>),
 
     /// Different to Unknown in the way that an Other error had an error code, but an Unknown error did not have an error code
-    Other(&'a str, &'a str)
+    Other(Box<str>, Box<str>)
 }
 
-impl Display for PHashError<'_> {
+impl Display for PHashError {
     // If you pass the result of this into res_body_to_result you should get an Err with the same PHashError
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -45,26 +45,26 @@ impl Display for PHashError<'_> {
 }
 
 /// Given the response body, convert it to a Result<PasswordHash, PHashError>.
-pub fn res_body_to_result<'a>(body: &'a str) -> Result<PasswordHash, PHashError<'a>> {
+pub fn res_body_to_result(body: &str) -> Result<PasswordHash, PHashError> {
     if body.len() == 0 { // When the server panics an empty response is sent
         return Err(PHashError::UnknownPanic)
     }
 
      // An OK response will just be the PHC string, which doesn't contain colons, but errors are delimited by their code followed by a colon
     let Some((errcode, message)) = body.split_once(": ") else {
-        return PasswordHash::new(&body).map_err(|_| PHashError::Unknown(body));
+        return PasswordHash::new(&body).map_err(|_| PHashError::Unknown(Box::from(body)));
     };
 
     // We have an error
     // Which one?
     Err(match errcode {
-        INVALID_DIGEST => PHashError::InvalidDigest(message),
-        INVALID_DIGEST_SIZE => PHashError::InvalidDigestSize(message),
-        INVALID_SALT => PHashError::InvalidDigest(message),
-        INVALID_SALT_SIZE => PHashError::InvalidDigestSize(message),
-        VERSION_MISMATCH => PHashError::VersionMismatch(message),
-        NO_VERSION_SPECIFIED => PHashError::VersionUnspecified(message),
-        INVALID_VERSION => PHashError::InvalidVersion(message),
-        _ => PHashError::Other(errcode, message)
+        INVALID_DIGEST => PHashError::InvalidDigest(Box::from(message)),
+        INVALID_DIGEST_SIZE => PHashError::InvalidDigestSize(Box::from(message)),
+        INVALID_SALT => PHashError::InvalidDigest(Box::from(message)),
+        INVALID_SALT_SIZE => PHashError::InvalidDigestSize(Box::from(message)),
+        VERSION_MISMATCH => PHashError::VersionMismatch(Box::from(message)),
+        NO_VERSION_SPECIFIED => PHashError::VersionUnspecified(Box::from(message)),
+        INVALID_VERSION => PHashError::InvalidVersion(Box::from(message)),
+        _ => PHashError::Other(Box::from(errcode), Box::from(message))
     })
 }
