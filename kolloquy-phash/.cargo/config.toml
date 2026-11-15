@@ -10,3 +10,11 @@ ar = "aarch64-linux-musl-ar"
 [target.aarch64-unknown-linux-musl.env]
 CC = "aarch64-linux-musl-gcc"
 CXX = "aarch64-linux-musl-g++"
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+ar = "aarch64-linux-gnu-ar"
+
+[target.aarch64-unknown-linux-gnu.env]
+CC = "aarch64-linux-gnu-gcc"
+CXX = "aarch64-linux-gnu-g++"

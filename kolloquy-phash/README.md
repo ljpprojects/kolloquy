@@ -2,6 +2,10 @@
 
 This is the server which Kolloquy uses to compute password hashes.
 
+**IMPORTANT: THE USE OF A PHASH SERVER IS NOT ENABLED BY DEFAULT, AND IS NOT
+RECOMMENDED IF YOU HAVE THE RESOURCES AVAILABLE TO COMPUTE THE HASHES ON ONE
+MAIN SERVER.**
+
 ## Tested Targets
 
 - `aarch64-apple-darwin`
@@ -27,5 +31,3 @@ all files and directories are owned by `klqy` unless specified otherwise):
     └── ssl.key     (Private key of the SSL keypair, PEM format, 0400)
 └── cache           (Directory to use for cache, 0600)
 ```
-
-(Technically anything more restrctive than `0700` doesn't really matter)

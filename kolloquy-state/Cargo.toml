@@ -7,19 +7,38 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-base64 = "0.22"
+kolloquy-crypto = { path = "../kolloquy-crypto" }
+kolloquy-consts = { path = "../kolloquy-consts" }
+base64 = "0.23"
 serde_json = "1.0"
-stack-string = "1.1"
+stack-string = "1.2"
+chrono = "0.4"
 
-[dependencies.worker]
-version = "0.8"
-features = ["d1"]
-
-[dependencies.web-sys]
-version = "0.3"
-default-features = false
-features = ["Crypto", "Window", "SubtleCrypto", "CryptoKey"]
+[dependencies.tokio]
+version = "1.54"
+optional = true
+features = ["fs"]
 
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]
+
+[dependencies.zeroize]
+version = "1.8"
+
+[dependencies.xattr]
+version = "1.7"
+optional = true
+
+[dependencies.sqlx]
+version = "0.9"
+features = ["runtime-tokio", "tls-rustls-ring-webpki"]
+optional = true
+
+[features]
+default = ["default-components"]
+default-components = ["dep:tokio", "dep:xattr", "dep:sqlx"]
+postgres-db = ["sqlx/postgres"]
+sqlite-db = ["sqlx/sqlite-unbundled"]
+mysql-db = ["sqlx/mysql"]
+

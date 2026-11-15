@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["success"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Indicates if the request succeeded."
+    },
+    "error": {
+      "type": "object",
+      "description": "The error, if any, that occurred."
+    },
+    "mtls": {
+      "type": "object",
+      "description": "The mTLS certificate issued by Kolloquy. They are not stored, but the certificate is signed by the internal Keyshare CA (this is what is verified).",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The private mTLS key that was generated."
+        },
+        "cert": {
+          "type": "string",
+          "description": "The generated mTLS certificate."
+        }
+      }
+    }
+  }
+}

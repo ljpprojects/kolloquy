@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["success"],
+  "properties": {
+    "success": {
+      "type": "boolean"
+    },
+    "purpose": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "The purpose of the session."
+    },
+    "callback": {
+      "type": "string",
+      "description": "The authority of the URI the RDAH server."
+    },
+    "salt": {
+      "type": "string",
+      "description": "The base64url-encoded salt for the session."
+    },
+    "reqPubKey": {
+      "type": "string",
+      "description": "The RD's base64url-encoded public X25519 key."
+    },
+    "sourcePubKey": {
+      "type": "string",
+      "description": "The SD's base64url-encoded public X25519 key. Not present if it has not yet been added to the session."
+    },
+    "error": {
+      "type": "object"
+    }
+  }
+}
