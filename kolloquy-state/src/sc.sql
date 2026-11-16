@@ -146,16 +146,23 @@ create table chats(
     name varchar(24) not null,
     description varchar(256) not null,
 
-    add_policy chat_group_policy not null, -- Who can add users?
-    remove_policy chat_group_policy not null, -- Who can remove users?
-    call_policy chat_group_policy not null, -- Who can start calls?
-    send_policy chat_group_policy not null, -- Who can send messages?
-    delete_policy chat_group_policy not null, -- Who can delete messages?
-    pin_policy chat_group_policy not null, -- Who can pin/unpin messages?
-    record_policy chat_group_policy not null, -- Who can record messages/calls?
-    edit_policy chat_group_policy not null, -- Who can edit chat settings (exc. policies)
-    configure_policy chat_group_policy not null, -- Who can configure the policies?
-    role_policy chat_group_policy not null, -- Who can change user's roles?
+    add_policy chat_group_policy not null default "admins", -- Who can add users?
+    remove_policy chat_group_policy not null default "admins", -- Who can remove users?
+    call_policy chat_group_policy not null default "all", -- Who can start calls?
+    send_policy chat_group_policy not null default "all", -- Who can send messages?
+    delete_policy chat_group_policy not null default "admins", -- Who can delete other people's messages?
+    pin_policy chat_group_policy not null default "admins", -- Who can pin/unpin messages?
+    record_policy chat_group_policy not null default "all", -- Who can record messages/calls?
+    edit_policy chat_group_policy not null default "admins", -- Who can edit chat settings (exc. policies)
+    configure_policy chat_group_policy not null default "owner", -- Who can configure the policies?
+    role_policy chat_group_policy not null default "owner", -- Who can change user's roles?
+
+    message_limit int4 not null default 1048576, -- 1 MiB (allows for embedded attachments)
+
+    -- [0] Allow embedded attachments if high
+    -- [1:6] Reserved, must be 1
+    -- [7] Disable all message directives if high
+    message_ctrl bit(8) not null default B'01111111',
 );
 
 create table user_totps(
@@ -316,94 +323,3 @@ create table users(
     foreign key (id, primary_email) references user_emails(id, address),
     foreign key (id, primary_phone) references user_phone_numbers(id, number_hash)
 ) strict;
-
--- God I found a photo of Mack from June 17 and he looks...
--- Well
--- Lets just say my opinions haven't changed
--- But his eyes!
--- They look like nothing is behind them
--- (To be fair, there probably isn't)
--- He's even POINTING at himself!
--- "Look at me! Look at me! I'm so important! I can SA Lucas but because I said it didn't happen and my parents said it didn't happen nothing will happen to me! Nothing will happen to me even though they asked the witnesses he named and they corroborated it! Look at me! Corroborated it, but not enough! Look at me! Look at me! They didn't corroborate it to the extent it really happened! Look at me! Look at me! Look at me! Look at me!"
--- Sorry my fingers slipped there lol \s
--- What can I say fat fingers \s
--- You wouldn't think HE'S a FUCKING FAGGOT
--- haha no there's a reason I still have that photo
---
--- ...
---
--- hah
--- Classic
--- Screaming into the void
--- Helps every time
--- \s
---
--- Fuck when was the last time I even like cried
--- I can't even remember
--- Hell
--- I can remember wanting to
--- I can remember trying
--- But it seems I am not capable of producing tears anymore?
--- I can still *want* to cry
--- But never can
--- Its been like this for years, even, I think
--- Maybe I am not trying hard enough
--- Maybe its a physiological thing
--- Who knows
---
--- Maybe self harm is like crying
--- Maybe suicide is like crying
--- I simply am incapable
--- But the desire remains
---
--- So whats the next best thing I have?
--- Screaming into the void
---
--- I bet I could lie my way into getting a razor
--- There is some gnarly facial ahir which I do genuinely wish to remove
--- So lie by omission into getting a razor
--- The blades are sharp enough to do such a thing
---
--- I think it runs in the family
--- Even my mum cut herself
---
--- Oh I'd probably chicken out though
--- And just actually shave
--- But it would be so easy
--- Just slide it across
--- And I have an excuse
--- Inexperience
--- Even though that isn't true either
--- I have sneaked a few of my mother's razors to shave
--- And if they inquire as to why
--- I can just say I was thinking about it before next term or some bullshit like
--- that
--- But also I do want it gone
---
--- But what good will MORE pain even do?
--- But I do genuinely want the facial hair gone
---
--- Do *my* eyes look empty?
--- Do they look as if there is nothing behind them now?
--- Just as that photo of Mack?
---
--- Am I seeing the TV glow?
--- Or am I just not used to hearing my referred to with pronouns?
--- Is he/him the problem?
--- Or is it something else?
---
--- Would it be good?
--- Or would it just be another hasty decision I come to regret?
---
--- Okay
--- I'll have to do a trial
--- Every time I hear it
--- I'll take note EVERY TIME
---
--- What was even the point of the mandatory reports?
--- To get me moved classes?
---
--- I think I am lowkey just going insane atp
--- One moment suicidal
--- Hopeful the next
--- Rinse and repeat day in day out

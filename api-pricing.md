@@ -1,129 +1,68 @@
 # API Pricing
 
+**!! This is a draft !!**
+
 ## Measurements
 
 The API uses the following measurements:
 
-`b/mon` (_bytes per month_) for messages received
+`prd`, A billing period
 
-`b/rcp/mon` (_bytes per recipient per month_) for messages sent
+`b`, bytes
 
-`mb/mon` (_megabytes per month_) for attachments uploaded
+`rcp`, recipient
 
-`kb/ptp/mon` (_kilobytes per participant per month_) for video and audio data sent during calls.
+`Mb`, megabytes
 
-A month is 30 days.
+`msg`, message
+
+`atc`, attachment
+
+The default billing period is 30 days.
 
 ## Costs
 
-One API token (`tk`) is equivalent to `USD$0.05`.
+One API token (`TK`) is equivalent to `AUD$0.025`.
+
+We also use the measurements `mTK` (millitoken, a 1000th of a token), `cTK`
+(centitoken, a 100th of a token), `dTK` (decitoken, a 10th of a token), and
+`daTK` (decatoken, 10 tokens).
 
 ### Messaging
 
-It costs `0.001 tk/b/mon` (_0.02 API tokens per byte per month_) to receive
-messages. This is equivalent to `1 tk/kb/mon`. The number of bytes is the total
-number of bytes received in message content (not API results).
+It costs `mTK1/b/msg` (_0.001 API tokens per byte_) to receive messages.
+This is equivalent to `TK5/kb`. The number of bytes is the total number of
+bytes received in message content (not API results).
 
-It costs `0.005 tk/b/rcp/mon` to send messages. The number of bytes is the total
-amount of sent bytes in message content, and the number of recipients is the
-median number of recipients each message is sent to. This is equivalent to
-`5 tk/kb/rcp/mon`.
+It costs `mTK5/b/rcp/msg` to send messages. The number of bytes is the total
+amount of sent bytes in message content. This is equivalent to `TK5/kb/rcp/mon`.
+
+For example, receiving 20 128 byte messages costs `TK2.56`. Sending 20 128 byte
+messages with 1 recipient each would cost `TK12.8`.
 
 ### Attachments
 
-It costs `5 tk/mb/50rcp/mon` to upload attachments. The number of megabytes is the
-total number of megabytes uploaded in attachments (not API request sizes). The
-number of recipients is the median number of users who each attachment is sent
-for. This is equivalent to `0.005 tk/kb/50rcp/mon`.
+It costs `TK2/Mb/rcp/atc` to upload attachments. The number of megabytes is the
+total number of megabytes uploaded in attachments (not API request sizes).
 
-It is free to download attachments.
+It costs `dTK5/Mb/atc` to download attachments.
 
-### Calling
-
-It costs somethign idfk know yet
+For example, downloading 50 attachments of size 512kb would cost `TK12.8`.
 
 ## Free tier
 
-The free tier provides 80 API tokens for free (`USD$4`). Everything beyond that
+The free tier provides 100 API tokens for free (`AUD$2.50`). Everything beyond that
 is charged.
-
-### Forward Free Tier
-
-Kolloquy provides a _forward free tier_. Essentially, you can increase the free
-tier limits for this 30-day preiod by decreasing the free tier limits for the
-coming 30-day period.
-
-How the forward free tier works is that you define a _period_ over which the tokens
-you added to this period's free tier are taken back. The total is how many
-tokens you gain to the free tier this period.
-
-The period has a limit of `6`, and the `total` is limited by the equation
-`80 - t/p - 0.05t >= 0`.
-
-Now of course, this isn't quite loan-like enough yet, so there is a small penalty
-for using the forward free tier, of `5%/period` (or `p.p.` if you rather lol).
-
-Given a period, the formula to calculate the maximum total allowed is:
-`80 / (1/p + 0.05)`,
-or, in LaTeX: `\frac{80}{p^{-1}+0.05}`.
-
-Given a period and a minumum desired balance for each subsequent period, the
-maximum total can be found with this formula:
-`(80 - b) / (1/p + 0.05)`, or, in LaTeX: `-\frac{b-80}{p^{-1}+0.05}`.
-
-Given a total, the absolute minimum period for it can be calculated with this
-formula: `t / (80 - 0.05t)`, or, in LaTeX: `\frac{t}{80-0.05t}`.
-
-Given a total and a minumum desired balance for each subsequent period, the
-minumum period for it can be calculated using this formula: `t / ( 80 - 0.05t - b)`,
-or, in LaTeX: `\frac{t}{80-0.05t-b}`.
-
-For example, if I predicted that I would use 100 API tokens this month, I could
-take advantaghe of the _forward free tier_ and take 20 tokens from next preiod's
-free tier to this period's free tier. The period for this would be `1` (for 1
-period) and the total `20`. This would leave me with `60 tks` (minus penalty) for
-the next period.
-
-If 60 API tokens for the next period was not enough, I could increase the period
-of the forward free tier to `2`. This would mean I have `70 tks` (minus penalty)
-for the next 2cperiods. The formula for the new free tier limit in the coming
-periods is simple: `80 - t/p - 0.05t`, where `t` is the `total` and `p` is
-the period.
-
-In total, I would have `69 tks` for the next two periods, or `74 tks` for the
-next four periods if I increased the periods, or `75.66 tks` for the next six if
-I maxed out the period.
-
-For this example, here is a table showing how many periods the deductions last
-and how much it is. Personally, I would elect to choose the 2 or 3 periods as
-after that it is all diminishing returns.
-
-| Periods | Free tier limit/period | Total penalties |
-| ------- | ---------------------- | --------------- |
-| `1`     | `59 tks`               | `1 tks`         |
-| `2`     | `69 tks`               | `2 tks`         |
-| `3`     | `72.33 tks` (floored)  | `3 tks`         |
-| `4`     | `74 tks`               | `4 tks`         |
-| `5`     | `75 tks`               | `5 tks`         |
-| `6`     | `75.66 tks` (floored)  | `6 tks`         |
-
-It is important to note that you *cannot* have concurrent forward free tier...
-'benefits'. This means that in the subsequent two months in that example, you
-would not be allowed to use the forward free tier functionality.
-
-You can use the forward free tier and your API credits together.
-
-You can apply the forward free tier at any time except the 3 days leading up to
-and the day of the charge for usage over the free tier limits. This means if you
-have a spike in usage and you can reasonably assume there will not be one in the
-next month/s you can use the forward free tier to pay less or none that period.
 
 ## API Credits
 
-You can purcahse API credits for a price of `USD$0.04/cr`. If you used 92 API
-tokens in a billing period, 12 of them would be paid. If you had 10 API credits,
-you would only pay for 2 tokens, but you would lose your API credits. You can
-decide how many credits to use on each payment. This would save you `USD$0.10`.
+You can purchase API credits for a price of `AUD$0.04/cr`. If you used 128 API
+tokens in a billing period, 28 of them would be paid. If you had 10 API credits,
+you would only pay for 18 tokens, but you would lose your API credits. You can
+decide how many credits to use on each payment.
+
+You can also purchase API credits and have them sent to another account (a
+"gift", if you will...)
 
 When you first sign up, you will receive 100 free API credits.
 
@@ -131,18 +70,37 @@ When you first sign up, you will receive 100 free API credits.
 
 ## Examples
 
-Let's say "John" has an API which, over 30 days, sends a total of 50 messages
-all of the exact same size (117b) and exactly to one recipient each time.
+Let's say "John" has an API which, over 30 days (which is what he has set his
+billing period to), sends a total of 50 messages all of the exact same size
+(117b) and exactly to one recipient each time, perhaps for OTP for his website.
 
-The message sending would cost `bytes * median(rcps) * months`, or `5850` 'units'.
-Each 'unit' would cost `0.005 tks`. In total, this would cost `29.25 tks`. This
-usage falls well within the free tier, so John would not be charged.
+John also has his API set up so that people can unsubscribe by sending a
+message. You can control chats to reject messages over a certain length if you
+have the neccessary permissions, so John has limited the message lengths to 11
+bytes, just enough to allow an `UNSUBSCRIBE` message. Let's say 9 people send
+exactly that message.
+
+The sent messages would cost `0.005 * 117 * 1 * 50` tokens, totalling `TK29.25`.
+
+The receieved message would cost `0.001 * 11 * 9` tokens, totalling `TK0.099`.
+
+In total, John's API usage for message sending and receiving will cost
+`TK29.349`, well within free tier allowances.
 
 ---
 
 Let's say "Apol" has a disgusting API which sends advertisements to many people.
 Let's say each advertisement was the same size (326 bytes), and to one recipient
 for each one. Over 30 days, Apol sends 683 advertisements.
+
+This would cost `0.001 * 326 * 1 * 683` tokens, totalling `TK222.658`. This
+does not fall within the free tier allowance, so Apol pays for `TK122.658`. At
+billing, tokens are rounded to the nearest token, so Apol owes `TK123`, or
+`AUD$4.92`.
+
+Apol's use of the Kolloquy API would also violate the terms of service, so if
+the messages were reported for breaching the ToS, after a review Apol's API may
+be suspended.
 
 This would total `222658` (`326 * 683 * 1 * 1`) 'units'. This would total
 `1113.29 tks`. This is well outside of the free tier limits. Applying the free
